@@ -152,6 +152,7 @@ MODELS = {
     "WH-1000XM5": {"wear": False},   # huynguyendinhquang
     "WH-1000XM4": {"wear": False},   # seth-reee, PR #6
     "WH-1000XM6": {"wear": True},    # f-iacono, PR #7 — answers f3 10 00
+    "WH-CH520": {"wear": False},     # enobale — f2 10 sent and never answered
 }
 UNKNOWN = {"wear": True}
 # No name at all is a caller written before this argument, and it gets exactly

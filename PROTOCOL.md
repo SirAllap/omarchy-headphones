@@ -742,6 +742,69 @@ were asked on this headset and neither was answered, so neither is in the
 bridge: their block lengths are unconfirmed, and a variant nobody has seen
 answered would be a guess sent to somebody's working headphones.
 
+### WH-CH520
+
+Confirmed on a **Sony WH-CH520** (`E8:9E:13:CF:9A:71`, modalias
+`usb:v054Cp0EADd1000`). It serves the same MDR v2 UUID (`956c7b26-…`) and the
+Fast Pair Message Stream (`df21fe2c-…`); battery is one figure for the set.
+Full transcripts of everything below are in
+[`docs/captures/sony-wh-ch520.txt`](docs/captures/sony-wh-ch520.txt).
+
+Handshake, `CONNECT_RET_PROTOCOL_INFO`, 8 bytes so v2:
+
+```
+01 00 03 00 10 01 00 00
+```
+
+The 0x17 block and its layout are the CH720N's:
+
+```
+->  66 17                       GET
+<-  67 17 01 01 00 00 01        RET: on, NC (not ambient), voice off, level 1
+->  66 15                       GET
+<-  ACK, then nothing
+->  66 22                       GET
+<-  ACK, then nothing
+->  66 02                       GET
+<-  ACK, then nothing
+```
+
+Where this headset differs from every other Sony model pinned so far: **no
+SET was ever seen to change anything it reported.** Four separate
+connections each sent one SET — `off`, `ambient` (with a level), a redundant
+same-state `nc`, and (through the widget's own bridge, not this probe) a
+plain re-assertion — and every one of them was ACKed at the transport level
+and then contradicted by the very next `NCASM_GET_PARAM 0x17`, which kept
+reporting exactly the pre-write state, for as long as thirteen seconds with
+no unsolicited `0x69` in between either:
+
+```
+->  68 17 01 00 00 00 0a        SET off        (this probe's own default level)
+<-  ACK
+->  66 17 (readback)
+<-  67 17 01 01 00 00 01        unchanged: still on, still NC, still level 1
+
+->  68 17 01 01 01 00 0a        SET ambient, level 10
+<-  ACK
+->  66 17 (readback)
+<-  67 17 01 01 00 00 01        unchanged
+```
+
+No wear sensor answered either: `f2 10` went out during probing and nothing
+came back, so its `MODELS` row is `{"wear": False}` like the CH720N's — the
+same value an unasked model would get by default, but written down rather
+than left to fall through, now that a pin exists for it.
+
+Read literally, this means the panel's Off/ANC/Ambient buttons and the
+Ambient slider are decoration on this specific unit: they send the same
+bytes that work on a WH-CH720N, the headset acknowledges receiving them,
+and its own state — which the bridge faithfully reports — never moves.
+Battery and the current mode are both read correctly. Whether the headset's
+own physical button still cycles modes, and whether that would arrive back
+over this channel as a `0x69`, was not tested: nothing in this session can
+press it. `tests/pins/sony/wh-ch520.json` pins exactly this — a GET that
+succeeds and four SETs that are ACKed and change nothing.
+
 What the bridge does with all this: `sonyUuidFor()` in `Model.js` picks which of
 the two UUIDs to hand it, and the bridge registers that one — that is all the
 UUID decides. The handshake's length **orders** the questions, `0x02` first on a
@@ -753,8 +816,8 @@ numbers do not collide across the two generations, so a `0x02` block is read as
 v1 and a `0x17` block as v2, whatever the UUID and the handshake suggested. Once
 a type has answered, a block of any other type is dropped.
 
-`tests/sony_bridge_test.py` pins one session per model — this one, the CH720N
-and the WH-1000XM5 — frame for frame.
+`tests/sony_bridge_test.py` pins one session per model — this one, the CH720N,
+the WH-1000XM5 and the WH-CH520 — frame for frame.
 
 ## WH-1000XM6: NCASM 0x19 notifications and wear status
 
@@ -782,10 +845,11 @@ confirmed on the Sony WH-1000XM6.
 Which headsets are asked is a row in `MODELS` in `sony-bridge`, keyed by the
 name the headset reports (`bluetoothctl info` shows it as `Name`), which
 `DeviceFollower.qml` passes as the bridge's third argument. The WH-CH720N, the
-WH-1000XM5 and the WH-1000XM4 are not asked — none of them has been seen to
-answer `f2 10`, and their sessions in `tests/sony_bridge_test.py` are unchanged
-by this — while a model with no row is, on the chance it has a sensor; an
-unanswered question costs nothing, since `worn` is only ever set by a reply.
+WH-1000XM5, the WH-1000XM4 and the WH-CH520 are not asked — none of them has
+been seen to answer `f2 10`, and their sessions in `tests/sony_bridge_test.py`
+are unchanged by this — while a model with no row is, on the chance it has a
+sensor; an unanswered question costs nothing, since `worn` is only ever set by
+a reply.
 
 ## Xiaomi Buds 5 Pro — Compact GAIA on SPP
 
