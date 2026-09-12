@@ -191,6 +191,17 @@ class ChannelRegression(unittest.TestCase):
         self.assertEqual(tried, [28, 28])
         self.assertEqual(device.channel, 28)
 
+    def test_cmf_buds_2_uses_only_16_including_retry(self):
+        for name in ("CMF Buds 2", "Nothing CMF Buds 2", "buds 2", " CMF BUDS 2 "):
+            with self.subTest(name=name):
+                device, ok, tried, sockets, sleeps = self.connect(name, {(15, 1), (16, 2)})
+                self.assertTrue(ok)
+                self.assertEqual(tried, [16, 16])
+                self.assertEqual(device.channel, 16)
+                self.assertTrue(sockets[0].closed)
+                self.assertFalse(sockets[1].closed)
+                self.assertEqual(sleeps, 1)
+
     def test_unknown_model_keeps_wider_discovery(self):
         device, ok, tried, _, _ = self.connect("Future NT Link", {(28, 1)})
         self.assertTrue(ok)
@@ -265,7 +276,7 @@ class CommandLine(unittest.TestCase):
 
     def test_optional_model_name_reaches_bridge_and_old_call_is_nameless(self):
         address = "2C:BE:EE:3C:6F:FE"
-        for tail in ([], ["CMF Headphone Pro"], ["Nothing Ear (a)"]):
+        for tail in ([], ["CMF Headphone Pro"], ["Nothing Ear (a)"], ["CMF Buds 2"]):
             with self.subTest(args=tail), \
                  patch.object(bridge.sys, "argv", ["nothing-bridge", address] + tail), \
                  patch.object(bridge.signal, "signal"), \
@@ -275,10 +286,10 @@ class CommandLine(unittest.TestCase):
                 factory.assert_called_once_with(address, tail[0] if tail else "")
                 factory.return_value.close.assert_called_once_with()
 
-    def test_probe_defaults_to_15_and_cmf_explicitly_selects_28(self):
+    def test_probe_defaults_to_15_and_cmf_explicitly_selects_channel(self):
         probe = harness.load_bridge("tools/nothing_probe.py")
         address = "2C:BE:EE:3C:6F:FE"
-        for args, channel in (([address], 15), (["--channel", "28", address], 28)):
+        for args, channel in (([address], 15), (["--channel", "16", address], 16), (["--channel", "28", address], 28)):
             with self.subTest(args=args), \
                  patch.object(probe.sys, "argv", ["nothing_probe.py"] + args), \
                  patch.object(probe.socket, "socket") as factory, \

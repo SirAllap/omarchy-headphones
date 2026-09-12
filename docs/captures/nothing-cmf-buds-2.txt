@@ -1,0 +1,33 @@
+Owner: Hanz Geeratz
+Model: CMF Buds 2
+Date: 2026-09-12
+Source: tools/nothing_probe.py-style probe on RFCOMM channel 16 (one
+  continuous NT Link session: initial read, mode switch and restore).
+Colours removed. Every byte is verbatim. Timestamps are the
+  probe's own elapsed clock, kept for ordering, not a timing model.
+
+  0.04s connected to channel 16
+
+### INITIAL STATE
+  0.05s -> device-info    get    55 60 01 06 c0 00 00 01 91 1f
+  0.09s <- device-info    answer 55 60 01 06 40 47 00 01 04 32 2c 32 2c 31 2e 30 2e 31 2e 35 32 0a 0a 32 2c 34 2c 31 33 35 31 39 38 32 35 31 30 30 32 37 35 38 31 0a 33 2c 32 2c 31 2e 30 2e 31 2e 35 32 0a 0a 33 2c 34 2c 31 33 35 31 39 38 32 35 31 30 30 32 37 35 38 31 0a e0 d0
+  1.54s -> battery        get    55 60 01 07 c0 00 00 01 ac df
+  1.54s -> anc            get    55 60 01 1e c0 00 00 01 b1 1d
+  1.54s -> latency        get    55 60 01 41 c0 00 00 01 25 10
+  1.54s -> codec-flag     get    55 60 01 29 c0 00 00 01 44 d9
+  1.56s <- battery        answer 55 60 01 07 40 05 00 01 02 02 64 03 64 32 89   left 100%, right 100%
+  1.58s <- anc            answer 55 60 01 1e 40 06 00 01 01 07 00 02 01 00 cf ea   mode transparency level=high
+  1.60s <- latency        answer 55 60 01 41 40 01 00 01 02 50 38   low latency off
+  1.62s <- codec-flag     answer 55 60 01 29 40 01 00 01 00 d9 11   codec flag 0
+
+### SET ANC -> high
+  2.55s -> anc-set        set    55 60 01 0f f0 03 00 01 01 01 00 f9 d7
+  2.57s <- anc-set        ack    55 60 01 0f 70 01 00 01 00 9e 13
+  2.89s <- anc-event      event  55 20 01 03 e0 06 00 00 01 01 00 02 01 00 c0 04   mode high level=high
+  3.56s -> anc            get    55 60 01 1e c0 00 00 01 b1 1d
+  3.57s <- anc            answer 55 60 01 1e 40 06 00 01 01 01 00 02 01 00 47 ea   mode high level=high
+
+### SET ANC -> transparency
+  4.56s -> anc-set        set    55 60 01 0f f0 03 00 01 01 07 00 fa 77
+  4.57s <- anc-set        ack    55 60 01 0f 70 01 00 01 00 9e 13
+  4.89s <- anc-event      event  55 20 01 03 e0 06 00 00 01 07 00 02 01 00 48 04   mode transparency level=high
