@@ -70,6 +70,14 @@ are explicit defaults; known model rows are never inferred from another model.
 Sony's `wear` flag retains exactly its prior known/unknown/nameless behavior.
 Draft model records never participate in selection.
 
+A model can also declare `transport` overrides for fields the adapter lists in
+`modelTransportFields`: `channels`, `uuidPreference`, `writeHandle`, or
+`notifyHandle`. The host resolves and validates them before opening a channel.
+For example, an observed RFCOMM channel difference is a model record containing
+`"transport": {"channels": [28]}`; it does not require protocol code or a new
+adapter. Known model overrides never widen another model's transport. A profile
+UUID preference is intersected with the actual advertised UUID list.
+
 ## Adapter
 
 Subclass `omaphones.api.Protocol`. Implement:
@@ -214,7 +222,8 @@ For an already native adapter:
 tools/new-model <adapter> <model-id> --name '<reported-name>' --owner '<owner>' --parameters '<json>'
 ```
 
-`--model-id` or `--uuid-suffix` can replace `--name`. The model is a draft until
+`--model-id` or `--uuid-suffix` can replace `--name`. Optional
+`--transport '<json>'` supplies observed model transport overrides. The model is a draft until
 you add its evidence and explicitly change its status. A legacy adapter still
 uses its existing model table and owner workflow; this generator refuses to
 pretend that a descriptor changes that old bridge.

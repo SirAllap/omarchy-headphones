@@ -77,23 +77,7 @@ def validate(row, package, root=ROOT, drafts=False):
     if row.get("entry"):
         if not contained(package, row["entry"]).is_file():
             raise ValueError("adapter entry does not exist")
-        transport = row.get("transport", {})
-        for field in ("replyTimeout", "connectTimeout", "connectDelay", "connectRetry", "connectAttempts", "discoveryTimeout", "registerTimeout"):
-            if field in transport and (type(transport[field]) is not int or transport[field] <= 0):
-                raise ValueError("transport timing/count must be a positive integer: " + field)
-        if transport.get("kind") not in KINDS:
-            raise ValueError("unknown transport")
-        if transport["kind"] == "bluez-profile":
-            uuids = transport.get("uuidPreference", [])
-            if not uuids or any(not UUID.fullmatch(u) for u in uuids):
-                raise ValueError("profile transport needs UUID preference")
-        if transport["kind"] == "ble-gatt":
-            for field in ("writeHandle", "notifyHandle"):
-                if not re.fullmatch(r"0x[0-9a-f]{4}", transport.get(field, "")):
-                    raise ValueError("invalid GATT handle")
-        if transport["kind"] == "rfcomm":
-            if not transport.get("channels") or any(type(c) is not int or not 1 <= c <= 30 for c in transport["channels"]):
-                raise ValueError("RFCOMM channels must be integers 1-30")
+        validate_transport(row.get("transport", {}))
     elif not row.get("legacy"):
         raise ValueError("adapter has neither an entry nor a legacy bridge")
     if row.get("legacy"):
@@ -104,6 +88,8 @@ def validate(row, package, root=ROOT, drafts=False):
             raise ValueError("unknown legacy argument")
     for parameters in (row.get("unknownModel", {}), row.get("namelessModel", {})):
         validate_parameters(row, parameters)
+    if set(row.get("modelTransportFields", [])) - MODEL_TRANSPORT_FIELDS:
+        raise ValueError("unsupported model transport field")
     seen = set()
     for path in sorted((package / "models").glob("*.json")):
         model = read_json(path)
@@ -122,6 +108,11 @@ def validate(row, package, root=ROOT, drafts=False):
         if any(not isinstance(value, str) or not value for value in model["match"].values()):
             raise ValueError("model identity values must be nonempty strings")
         validate_parameters(row, model.get("parameters"))
+        overrides = model.get("transport", {})
+        if not isinstance(overrides, dict) or set(overrides) - set(row.get("modelTransportFields", [])):
+            raise ValueError("model overrides an undeclared transport field")
+        if overrides:
+            validate_transport({**row["transport"], **overrides})
         for field in ("owners", "captures", "pins"):
             if not isinstance(model.get(field, []), list) or any(not isinstance(value, str) or not value for value in model.get(field, [])):
                 raise ValueError("model " + field + " must be a list of nonempty strings")
@@ -131,6 +122,28 @@ def validate(row, package, root=ROOT, drafts=False):
         if model.get("evidence") != "existing" and row["status"] == "active" and model.get("status", "active") == "active":
             if not model.get("owners") or not model.get("pins") or not model.get("captures"):
                 raise ValueError("new active model needs owner, pin and capture")
+
+
+MODEL_TRANSPORT_FIELDS = {"channels", "uuidPreference", "writeHandle", "notifyHandle"}
+
+
+def validate_transport(transport):
+    for field in ("replyTimeout", "connectTimeout", "connectDelay", "connectRetry", "connectAttempts", "discoveryTimeout", "registerTimeout"):
+        if field in transport and (type(transport[field]) is not int or transport[field] <= 0):
+            raise ValueError("transport timing/count must be a positive integer: " + field)
+    if transport.get("kind") not in KINDS:
+        raise ValueError("unknown transport")
+    if transport["kind"] == "bluez-profile":
+        uuids = transport.get("uuidPreference", [])
+        if not uuids or any(not UUID.fullmatch(u) for u in uuids):
+            raise ValueError("profile transport needs UUID preference")
+    if transport["kind"] == "ble-gatt":
+        for field in ("writeHandle", "notifyHandle"):
+            if not re.fullmatch(r"0x[0-9a-f]{4}", transport.get(field, "")):
+                raise ValueError("invalid GATT handle")
+    if transport["kind"] == "rfcomm":
+        if not transport.get("channels") or any(type(c) is not int or not 1 <= c <= 30 for c in transport["channels"]):
+            raise ValueError("RFCOMM channels must be integers 1-30")
 
 
 def validate_parameters(row, parameters):
@@ -166,7 +179,7 @@ def select(uuids, ble_address="", root=ROOT):
     return ""
 
 
-def model_parameters(row, context, root=ROOT):
+def selected_model(row, context, root=ROOT):
     package = root / "adapters" / row["id"]
     matches = []
     for path in sorted((package / "models").glob("*.json")):
@@ -181,9 +194,19 @@ def model_parameters(row, context, root=ROOT):
             matches.append(model)
     if len(matches) > 1:
         raise ValueError("ambiguous model identity")
-    if matches:
-        return matches[0]["parameters"]
+    return matches[0] if matches else None
+
+
+def model_parameters(row, context, root=ROOT):
+    model = selected_model(row, context, root)
+    if model is not None:
+        return model["parameters"]
     return row.get("namelessModel", row.get("unknownModel", {})) if not context.get("name") else row.get("unknownModel", {})
+
+
+def transport_for(row, context, root=ROOT):
+    model = selected_model(row, context, root)
+    return {**row["transport"], **(model.get("transport", {}) if model else {})}
 
 
 def load_protocol(row, context, root=ROOT):

@@ -8,7 +8,7 @@ import signal
 from omaphones.api import Event
 from omaphones import cache
 from omaphones.platform import arm_parent_death_signal, emit, GLibClock
-from omaphones.registry import get_adapter, load_protocol
+from omaphones.registry import get_adapter, load_protocol, transport_for
 from omaphones.session import Session
 from omaphones.state import legacy_command
 
@@ -52,7 +52,14 @@ def main(argv=None):
                 raise ValueError("invalid identity field: " + key)
         if "uuids" in context and (not isinstance(context["uuids"], list) or any(not isinstance(u, str) for u in context["uuids"])):
             raise ValueError("invalid UUID list")
-        if row["transport"]["kind"] == "bluez-profile" and context.get("uuid") and context["uuid"] not in row["transport"]["uuidPreference"]:
+        transport_config = transport_for(row, context)
+        if transport_config["kind"] == "bluez-profile" and context.get("uuids"):
+            advertised = [u.lower() for u in context["uuids"]]
+            uuid = next((u for u in transport_config["uuidPreference"] if u in advertised), None)
+            if uuid is None:
+                raise ValueError("device does not advertise the model's transport UUID")
+            context["uuid"] = uuid
+        if transport_config["kind"] == "bluez-profile" and context.get("uuid") and context["uuid"] not in transport_config["uuidPreference"]:
             raise ValueError("UUID is outside this adapter's profile list")
         protocol = load_protocol(row, context)
     except Exception as error:
@@ -68,7 +75,7 @@ def main(argv=None):
         emit({"modes": False, "error": "missing python dependency: " + str(error)})
         return 4
     loop = GLib.MainLoop()
-    transport = TRANSPORTS[row["transport"]["kind"]](row["transport"], context, GLib)
+    transport = TRANSPORTS[transport_config["kind"]](transport_config, context, GLib)
     remembered = False
     def output(state):
         nonlocal remembered

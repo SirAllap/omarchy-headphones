@@ -52,6 +52,7 @@ class RunnerTests(unittest.TestCase):
              patch('omaphones.runner.arm_parent_death_signal'), \
              patch('omaphones.runner.get_adapter', return_value=row), \
              patch('omaphones.runner.load_protocol', return_value=Adapter()), \
+             patch('omaphones.runner.transport_for', return_value=row['transport']), \
              patch('omaphones.runner.emit', side_effect=outputs.append), \
              patch('omaphones.runner.os.read', side_effect=chunks), \
              patch.dict('omaphones.transports.TRANSPORTS', {'ble-gatt': Transport}):

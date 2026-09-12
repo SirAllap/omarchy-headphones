@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from omaphones.registry import ROOT, descriptors, get_adapter, load_protocol, model_parameters
+from omaphones.registry import ROOT, descriptors, get_adapter, load_protocol, model_parameters, transport_for
 from omaphones.scaffold import new_adapter, new_model
 from omaphones.checking import check_boundary, suite_for
 from omaphones.testing import Replay
@@ -67,6 +67,25 @@ class Tools(unittest.TestCase):
         row['apiVersion'] = 2; self.save('adapter.json', row)
         with self.assertRaisesRegex(ValueError, 'API version'):
             descriptors(self.root)
+
+    def test_model_channel_override_cannot_change_peer_or_unknown_transport(self):
+        row = json.loads((self.package/'adapter.json').read_text())
+        row['transport'] = {'kind': 'rfcomm', 'channels': [15, 28]}
+        row['modelTransportFields'] = ['channels']
+        self.save('adapter.json', row)
+        for name, channel in (('old', 15), ('new', 28)):
+            self.save('models/' + name + '.json', {'id': name, 'match': {'name': name}, 'parameters': {}, 'transport': {'channels': [channel]}})
+        descriptors(self.root, drafts=True)
+        self.assertEqual(transport_for(row, {'name': 'old'}, self.root)['channels'], [15])
+        self.assertEqual(transport_for(row, {'name': 'new'}, self.root)['channels'], [28])
+        self.assertEqual(transport_for(row, {'name': 'unseen'}, self.root)['channels'], [15, 28])
+        bad = json.loads((self.package/'models/new.json').read_text())
+        bad['transport'] = {'channels': [31]}; self.save('models/new.json', bad)
+        with self.assertRaisesRegex(ValueError, '1-30'):
+            descriptors(self.root, drafts=True)
+        bad['transport'] = {'kind': 'ble-gatt'}; self.save('models/new.json', bad)
+        with self.assertRaisesRegex(ValueError, 'undeclared transport'):
+            descriptors(self.root, drafts=True)
 
     def test_boundary_refuses_platform_imports_and_file_access(self):
         for source in ('import socket', 'from os import read', 'open("state.json")', '__import__("os")'):

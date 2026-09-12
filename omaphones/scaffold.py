@@ -55,6 +55,7 @@ def new_adapter(argv=None, root=ROOT):
     save(package / "adapter.json", {
         "apiVersion": 1, "id": args.id, "status": "draft", "priority": args.priority,
         "match": {"uuids": [args.uuid]}, "entry": "protocol.py", "transport": transport,
+        "modelTransportFields": {"bluez-profile": ["uuidPreference"], "rfcomm": ["channels"], "ble-gatt": ["writeHandle", "notifyHandle"]}[args.transport],
     })
     (package / "protocol.py").write_text('''"""Fill only from this device's observed protocol; see docs/ADAPTER-API.md."""
 from omaphones.api import Protocol
@@ -91,6 +92,7 @@ def new_model(argv=None, root=ROOT):
     identity.add_argument("--uuid-suffix")
     parser.add_argument("--owner", required=True)
     parser.add_argument("--parameters", default="{}", help="JSON protocol variant parameters")
+    parser.add_argument("--transport", default="{}", help="JSON observed model transport overrides")
     args = parser.parse_args(argv)
     if not ID.fullmatch(args.adapter) or not ID.fullmatch(args.id):
         parser.error("invalid adapter or model id")
@@ -102,9 +104,12 @@ def new_model(argv=None, root=ROOT):
     parameters = json.loads(args.parameters)
     if not isinstance(parameters, dict):
         parser.error("parameters must be an object")
+    overrides = json.loads(args.transport)
+    if not isinstance(overrides, dict) or set(overrides) - set(row.get("modelTransportFields", [])):
+        parser.error("undeclared model transport override")
     match = {"name": args.name} if args.name else {"modelId": args.model_id} if args.model_id else {"uuidSuffix": args.uuid_suffix}
     (package / "models").mkdir(exist_ok=True)
     path = package / "models" / (args.id + ".json")
     save(path, {"id": args.id, "status": "draft", "match": match, "parameters": parameters,
-                "owners": [args.owner], "pins": [], "captures": []})
+                "owners": [args.owner], "pins": [], "captures": [], "transport": overrides})
     print(path)
