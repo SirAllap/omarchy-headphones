@@ -25,6 +25,73 @@ const Model = new Function(
   source + "\nreturn { " + exported.join(", ") + " };",
 )();
 
+// Synthetic device profiles exercise routing only; they claim no hardware support.
+function withDeviceProfiles(rows, run) {
+  const previous = Model.DEVICE_PROFILES.slice();
+  Model.DEVICE_PROFILES.splice(0, Model.DEVICE_PROFILES.length, ...rows);
+  try { run(); } finally {
+    Model.DEVICE_PROFILES.splice(0, Model.DEVICE_PROFILES.length, ...previous);
+  }
+}
+
+const apiProfile = () => ({
+  id: "api-fixture", model: "API Fixture",
+  match: { names: ["API Fixture"], uuids: [Model.NOTHING_NT_LINK_UUID] },
+  adapter: { builtin: "nothing", transport: "classic", parameters: { channels: [28] } },
+  capabilities: { modes: ["off", "anc", "ambient"] },
+});
+
+Deno.test("device profiles require exact reported name and every required UUID", () => {
+  const profile = apiProfile();
+  withDeviceProfiles([profile], () => {
+    assertEquals(Model.controlBackend([Model.NOTHING_NT_LINK_UUID], "", "API Fixture"), "device:api-fixture");
+    assertEquals(Model.controlBackend([Model.NOTHING_NT_LINK_UUID.toUpperCase()], "", "api fixture"), "device:api-fixture");
+    assertEquals(Model.controlBackend([Model.NOTHING_NT_LINK_UUID], "", "My nickname"), "nothing");
+    assertEquals(Model.controlBackend([], "", "API Fixture"), "");
+    assertEquals(Model.controlBackend([Model.NOTHING_NT_LINK_UUID], "", "Ear (a)"), "nothing");
+    assertEquals(Model.bridgeArgs("nothing", { address: "classic", name: "Ear (a)" }), ["classic", "Ear (a)"]);
+    profile.match.uuids.push(Model.SONY_MDR_V2_UUID);
+    assertEquals(Model.deviceProfile([Model.NOTHING_NT_LINK_UUID], "API Fixture", ""), null);
+  });
+});
+
+Deno.test("ambiguous profiles do not pick the first contributor", () => {
+  const first = apiProfile();
+  const second = { ...apiProfile(), id: "other-fixture" };
+  withDeviceProfiles([first, second], () => {
+    assertEquals(Model.deviceProfile([Model.NOTHING_NT_LINK_UUID], "API Fixture"), null);
+    assertEquals(Model.controlBackend([Model.NOTHING_NT_LINK_UUID], "", "API Fixture"), "nothing");
+  });
+});
+
+Deno.test("profile launcher arguments and ambient controls are local to the model", () => {
+  const profile = apiProfile();
+  profile.capabilities.ambient = { min: 1, max: 5, voice: "Wind", voiceCommand: "wind" };
+  withDeviceProfiles([profile], () => {
+    const backend = "device:api-fixture";
+    assertEquals(Model.bridgeFor(backend), "device-adapter");
+    assertEquals(Model.isClassicBackend(backend), true);
+    assertEquals(Model.bridgeArgs(backend, { profile: profile.id, address: "classic", name: "API Fixture", uuids: "[]", bleAddress: "ble", modelId: "123456" }),
+      ["api-fixture", "classic", "API Fixture", "[]", "ble", "123456"]);
+    assertEquals(Model.ambientRange(backend), profile.capabilities.ambient);
+    assertEquals(Model.ambientRange("sony").max, 20);
+    assertEquals(Model.adapterReady(backend, false, "", ""), true);
+  });
+});
+
+Deno.test("BLE profiles wait for Fast Pair identity and an announced address", () => {
+  const profile = apiProfile();
+  profile.adapter.transport = "ble";
+  profile.match.modelId = "123456";
+  withDeviceProfiles([profile], () => {
+    assertEquals(Model.deviceProfile(profile.match.uuids, "API Fixture", "000000"), null);
+    assertEquals(Model.controlBackend(profile.match.uuids, "ble", "API Fixture", "123456"), "device:api-fixture");
+    assertEquals(Model.adapterReady("device:api-fixture", false, "ble", "123456"), false);
+    assertEquals(Model.adapterReady("device:api-fixture", true, "", "123456"), false);
+    assertEquals(Model.adapterReady("device:api-fixture", true, "ble", "123456"), true);
+  });
+});
+
 Deno.test("every top-level helper and glyph constant is reachable", () => {
   // Guards the derivation above: if the regexes stop seeing the source, this
   // fails here instead of turning every other test into `undefined is not a

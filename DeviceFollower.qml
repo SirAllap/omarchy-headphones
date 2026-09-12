@@ -189,6 +189,7 @@ Item {
   // UUIDs arrived and then never ran sony-bridge.
   readonly property bool classicWanted: useModeControl && classicEnabled && connected
     && classicBridgePath !== ""
+    && Model.adapterReady(controlBackend, useFastPair, bleAddress, modelId)
     && !addressParked
   property bool classicArmed: false
   onClassicWantedChanged: {
@@ -199,7 +200,8 @@ Item {
   // What this device serves, read once per connection with `bluetoothctl info`.
   // Empty while it is not connected, or while the probe is still out.
   property var deviceUuids: []
-  readonly property string controlBackend: Model.controlBackend(deviceUuids, bleAddress)
+  readonly property string controlBackend: Model.controlBackend(deviceUuids, bleAddress, reportedName, modelId)
+  readonly property var deviceProfile: Model.profileForBackend(controlBackend)
   readonly property bool classicBackend: Model.isClassicBackend(controlBackend)
   // Which of Sony's two MDR services this device serves. Both read as "sony",
   // and both come out of the same UUID list, so this is non-empty exactly when
@@ -484,7 +486,8 @@ Item {
   // to ambient as part of it, because the level is stored only by a set that
   // carries it: sending a level while Noise Cancelling is on changes nothing.
   function setAmbientLevel(value) {
-    if (!classicLive("sony") && !classicLive("soundcore")) return false
+    if (!classicLive("sony") && !classicLive("soundcore")
+        && !(deviceProfile && deviceProfile.capabilities.ambient && ambientControls && classicBridge.running)) return false
     var level = Math.max(ambientMin, Math.min(ambientMax, Math.round(Number(value))))
     if (!isFinite(level)) return false
     classicBridge.write("level " + level + "\n")
@@ -493,6 +496,11 @@ Item {
 
   // Focus on Voice (Sony) / Wind Noise Reduction (Soundcore)
   function setAmbientVoice(on) {
+    if (deviceProfile) {
+      if (!deviceProfile.capabilities.ambient || !ambientControls || !classicBridge.running) return false
+      classicBridge.write(deviceProfile.capabilities.ambient.voiceCommand + " " + (on ? "on" : "off") + "\n")
+      return true
+    }
     if (classicLive("soundcore")) {
       classicBridge.write("wind " + (on ? "on" : "off") + "\n")
       return true
@@ -740,7 +748,10 @@ Item {
     command: follower.classicBridgePath === ""
       ? ["true"]
       : [follower.classicBridgePath].concat(Model.bridgeArgs(follower.controlBackend, {
-          address: follower.address, uuid: follower.sonyUuid, name: follower.reportedName }))
+          address: follower.address, uuid: follower.sonyUuid, name: follower.reportedName,
+          profile: follower.deviceProfile ? follower.deviceProfile.id : "",
+          uuids: JSON.stringify(follower.deviceUuids), bleAddress: follower.bleAddress,
+          modelId: follower.modelId }))
     stdinEnabled: true
     stdout: SplitParser {
       onRead: function(line) { follower.applyAncLine(line) }

@@ -22,19 +22,21 @@ model, you cannot test anybody else's, and every model in README's table
 works today on frames that only its owner can retest. Two rules follow, and
 a pull request that breaks either is sent back:
 
-1. **A new model may not change what an existing one is sent.** A model is
-   a row — in `MODELS` in its bridge where the bridge has one, in `BACKENDS`
-   in `Model.js` for a brand — and a pin file, `tests/pins/<brand>/<model>.json`,
-   the frozen session of that owner's headphones. Adding yours adds a row
-   and a file. It does not edit another owner's row or pin, and it does not
+1. **A new model may not change what an existing one is sent.** Existing models
+   have their rows in `MODELS`/`BACKENDS` and frozen
+   owner sessions in `tests/pins/<brand>/<model>.json`. New models have an
+   isolated `devices/<model>/` package under the device API. Adding yours
+   adds its own configuration and evidence. It does not edit another owner's
+   row or pin, and it does not
    turn something that was always sent into something now decided. Where a
    decision is unavoidable, widen: `UNKNOWN` gets the wider behaviour,
    known models keep theirs.
 2. **Ship only what you saw the headphones answer.** No bytes from a vendor
    table your headset never answered — not in the code, not in
-   `PROTOCOL.md`. Keep the probe's output as `docs/captures/<brand>-<model>.txt`
-   and name it from your pin (`"capture": ...`); a frame the bridge parses
-   should be in there.
+   `PROTOCOL.md`. Existing pins retain their `docs/captures/` evidence. New
+   packages
+   keep exact transport RX/TX in `capture.jsonl`, referenced by `session.json`;
+   a frame the adapter parses should be in there.
 
 ## Canonical owner examples
 
@@ -66,39 +68,27 @@ install-command words, README's gallery against `docs/gallery/`,
 CI runs the same script on every pull request. Run it until it passes; a
 skipped line names the tool this machine lacks.
 
-## Adding a model to a brand that has a bridge
+## Adding your headphones
 
-1. Find what the device answers with the brand's probe in `tools/`
-   (`sony_probe.py`, `soundcore_probe.py`, …). Turn `useModeControl` off
-   first, or the running bridge holds the channel.
-2. If the bridge has a `MODELS` table, add a row keyed by what the row
-   comment says (Sony: the reported name; Soundcore: the vendor UUID
-   suffix). Do not edit another row.
-3. Add `tests/pins/<brand>/<model>.json` — copy a sibling, replace the
-   frames with yours, name yourself as `owner`. The format is the docstring
-   of `tests/harness.py`.
-4. `PROTOCOL.md`: a subsection under the brand with what the device
-   answered. `docs/captures/`: the probe output.
-5. `README.md`: a row in the table, a gallery cell with the screenshot
-   (`tools/gallery-shot`, see `.claude/skills/gallery-screenshot/`).
-6. `tools/check`.
+Use `tools/add-device` and [the device API guide](docs/ADAPTER-API.md).
+The contribution unit is `devices/<model>/`: profile, exact device identity,
+capture, reviewed session, model fault tests, owner hardware/integration checks,
+protocol notes and screenshot. The guide suggests an existing adapter from
+UUIDs; a device with a different protocol brings `adapter.py` beside its profile.
 
-## Adding a brand
+Known protocol parameters stay local to the new profile. Do not edit another
+model's bridge row, pin or package. Existing bridge scripts and their owner pins
+remain binding and are not migrated by this workflow. New packages may not
+claim an existing owner's reported model name.
 
-1. Find the channel and the frames: `PROTOCOL.md` says how each existing
-   one was found; the probes in `tools/` are the pattern.
-2. Write `<brand>-bridge` to `BRIDGE.md`. `sony-bridge` (D-Bus Profile1,
-   the most complete) or `samsung-bridge` (the shortest) is the one to copy.
-3. Add its row to `BACKENDS` in `Model.js` — what it claims, the file, the
-   arguments, the Ambient row's shape. Put the row where its claim cannot
-   take another brand's device; `tests/model.test.js` pins that for the
-   devices that work today, and needs your device's full UUID list added.
-4. `tests/<brand>_bridge_test.py` on `tests/harness.py` — a Session that
-   captures the bridge's writes and says what "device" and "sent" mean for
-   this protocol — and the first pin under `tests/pins/<brand>/`.
-5. `PROTOCOL.md` section, `docs/captures/` file, README row, gallery cell,
-   `manifest.json` aliases and description.
-6. `tools/check`.
+`tools/add-device sync` generates the new-device registry in `Model.js` and the
+README section. Run `CHECK_BASE=origin/main tools/check`; missing evidence,
+skipped model fault scenarios, stale generated files and stale hardware reports
+fail. CI writes the same per-device readiness report into its job summary.
+
+New control types still require an explicit change to `BRIDGE.md` and the UI.
+The v1 profile vocabulary covers the existing listening-mode controls; a local
+adapter implements the same contract rather than inventing new shell behavior.
 
 ## Never
 
@@ -120,6 +110,9 @@ skipped line names the tool this machine lacks.
 
 | | |
 |:--|:--|
+| `devices/<model>/` | One new model: profile, adapter if needed, evidence and owner checks |
+| `adapter_api/`, `device-adapter` | Profile validation, runtime adapter boundary, capture, replay and readiness |
+| `tools/add-device` | Guided contribution, live check and generated registry/gallery |
 | `Model.js` | the decisions: device picking, `BACKENDS`, parsing, formatting. Deno tests in `tests/model.test.js` |
 | `Service.qml` | the followed devices, the Fast Pair reader, parking and backoff, the IPC methods |
 | `DeviceFollower.qml` | one device: reading, bridge process, the state the panel reads |

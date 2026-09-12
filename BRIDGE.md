@@ -12,6 +12,13 @@ Which bridge a device gets, and what it is started with, is the device's row
 in `BACKENDS` in `Model.js`. `DeviceFollower.qml` starts it, feeds it stdin,
 reads its stdout line by line and acts on its exit code.
 
+New device packages use `device-adapter` as their process boundary. It loads
+one validated profile, delegates to an existing bridge in a private module or
+the package's `adapter.py`, and speaks this same contract. The profile supplies
+model parameters and declared controls; QML still uses device-reported state.
+See [device API v1](docs/ADAPTER-API.md). Existing bridge entry points and their
+owner pins keep their current arguments and behavior.
+
 ## Command line
 
 ```

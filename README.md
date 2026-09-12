@@ -146,84 +146,30 @@ See [the test record and remaining limits](docs/CMF-REVIEW.md).
 
 ## Add your own headphones
 
-Use `/add-new-bridge` in Codex or Claude, or ask your agent to read
-[the shared skill](.agents/skills/add-new-bridge/SKILL.md). It first checks
-whether an existing bridge suffices, then guides capture, tests and owner validation.
+Run `tools/add-device` from an isolated checkout to start a device package.
+The [device API guide](docs/ADAPTER-API.md) covers identification, capture,
+replay, owner checks and the readiness report. New models keep their profile,
+evidence and optional adapter together under `devices/<model>/`.
 
-Paste the text below into your AI coding agent (Claude Code, Codex, OpenCode…).
-It adds support for your headphones and opens a pull request here. How the
-existing protocols were found is written down in [PROTOCOL.md](PROTOCOL.md).
+<!-- BEGIN DEVICE PACKAGES -->
+<!-- END DEVICE PACKAGES -->
+
+You can also ask your coding agent to use `/add-new-bridge` or read
+[the shared skill](.agents/skills/add-new-bridge/SKILL.md):
 
 ```text
-Add support for my Bluetooth headphones to the Omaphones plugin for Omarchy and
-open a pull request against `github.com/ncr/omarchy-headphones` with the result.
-0. If it is not installed yet: `omarchy plugin add
-   https://github.com/ncr/omarchy-headphones --enable --yes` (`--yes` because you
-   have no terminal to confirm in). It lands in
-   `~/.config/omarchy/plugins/io.github.ncr.omaphones`.
-1. Connect the headphones and check `omarchy-shell omaphones status`. Find out
-   what they serve: `bluetoothctl devices` for the address, `bluetoothctl info
-   <address>` for the UUIDs — `df21fe2c-2515-4fdb-8886-f12c4d67927c` is the
-   Google Fast Pair Message Stream (battery), `956c7b26-d49a-4ba8-b03f-b17d393cb6e2`
-   is Sony MDR v2 and `96cc203e-5068-46ad-b32d-e316f5e069ba` Sony MDR v1 (both
-   noise control), `2e73a4ad-332d-41fc-90e2-16bef06523f2` is Samsung SPPNew,
-   `aeac4a03-dff5-498f-843a-34487cf133eb` is Nothing NT Link, a UUID
-   starting `0cf12d31-fac3-4553-bd80-d6832e7` is Soundcore's vendor channel;
-   JBL earbuds are probed over BLE by the plugin itself.
-2. If battery and the mode row both already work, no bridge change is needed.
-   Still bring my device's own capture, pin and confirmed capabilities from
-   step 3, plus its README row and the screenshot from step 4.
-3. Follow `.agents/skills/add-new-bridge/SKILL.md` in the repository.
-   Read `AGENTS.md` in the plugin directory
-   first: it is the map — which files a new model or a new brand touches,
-   the bridge contract (`BRIDGE.md`), how a session is pinned
-   (`tests/pins/`), and `tools/check`, the one command that runs everything
-   a pull request is held to. Run `tools/check` until it passes; CI runs the
-   same script on the pull request.
-
-   The canonical examples are JBL TUNE230NC TWS and Sony WH-CH720N,
-   prepared and hardware-tested by the maintainer @ncr on his own headphones.
-   Read `docs/CANONICAL-TESTS.md`, their `*-canonical.json` pins, captured
-   packets and shared fault/battery tests. Match their coverage for the
-   capabilities my model actually offers: all mode replies, battery shape,
-   malformed/partial data, unsolicited changes, silence vs disconnect,
-   recovery and isolation from another device. Use my device's own frames;
-   canonical means a coverage example, not permission to reuse their bytes.
-   Record a live test with device-reported results and restored settings;
-   clearly list anything untested or not applicable. Preserve all existing pins.
-   These expanded requirements apply to new models and brands. Existing
-   supported models keep their current coverage; do not require historical
-   gaps to be filled. Changes to an existing model need tests for the changed
-   behaviour and its owner's confirmation, while preserving its existing pins.
-
-   Two rules hold whatever brand this is, because nobody has more than their
-   own headphones — the maintainer cannot test mine and I cannot test
-   anybody else's — and a pull request that breaks either will be sent back:
-
-   **A new model may not change what an existing one is sent.** Somebody
-   else's headphones work today on frames nobody here can retest. A model
-   gets its own row (`MODELS` in its bridge) and its own pin file
-   (`tests/pins/<brand>/<model>.json`, the frozen session of its owner's
-   headphones); adding mine adds a row and a file, it does not edit another
-   owner's. Where something must be decided, let it widen rather than
-   narrow: prefer asking one more question to asking one fewer.
-
-   **Ship only what you saw the headphones answer — no guessed bytes.** A
-   variant from a vendor table that my headset never answered stays out, in
-   the code and in `PROTOCOL.md` both. Keep the probe's output as
-   `docs/captures/<brand>-<model>.txt` and name it from the pin.
-
-   Mind that any file written inside the plugin directory reloads the plugin
-   at once — edit elsewhere and move files in, as the tools in `tools/` do.
-4. Take the screenshot: `tools/gallery-shot <which>` — the `gallery-screenshot`
-   skill in `.claude/skills/` has the steps — and add it to the Gallery at the
-   bottom of `README.md` with the device name and my handle. The screenshot is
-   part of the pull request.
-5. Commit, push to a fork, and open the pull request.
+Add support for my Bluetooth headphones to Omaphones using its device API v1.
+Read AGENTS.md and docs/ADAPTER-API.md. Work in an isolated checkout.
+Start with tools/add-device, use my device's own replies, and keep the work in
+its devices/<model>/ package. Prefer an existing adapter when it fits; otherwise
+implement adapter.py beside the profile. Preserve all existing owner models.
+Run the replay and fault checks, have me test the final executable on my
+headphones, record restoration and untested capabilities, then run
+ tools/add-device sync
+ CHECK_BASE=origin/main tools/check
+Prepare the PR with the device package, generated registry/gallery and the
+readiness report. Do not claim hardware verification from unit tests alone.
 ```
-
-Negative results are welcome too — a row saying what does not work saves the
-next person the afternoon.
 
 ## In the panel
 

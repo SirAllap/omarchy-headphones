@@ -26,7 +26,7 @@ bridges=$(ls ./*-bridge)
 # ---- Python parses. ast rather than py_compile, which writes __pycache__.
 if out=$(python3 -c 'import ast, sys
 for path in sys.argv[1:]:
-    ast.parse(open(path).read(), path)' $bridges gfps-reader tools/check-live tools/*.py tests/*.py 2>&1); then
+    ast.parse(open(path).read(), path)' $bridges device-adapter gfps-reader tools/check-live tools/add-device adapter_api/*.py tools/*.py tests/*.py 2>&1); then
   ok "python syntax"
 else
   fail "python syntax"; echo "$out"
@@ -37,6 +37,16 @@ if out=$(python3 -m unittest discover -s tests -t . -p '*_test.py' 2>&1); then
   ok "bridge tests ($(echo "$out" | grep -o 'Ran [0-9]* tests'))"
 else
   fail "bridge tests"; echo "$out" | tail -40
+fi
+
+# ---- Device packages: replay captured bytes, model faults, owner evidence and
+#      deterministic registry/gallery. Existing owner pins are checked below.
+report_args=()
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then report_args=(--summary "$GITHUB_STEP_SUMMARY"); fi
+if out=$(tools/add-device check "${report_args[@]}" 2>&1); then
+  ok "device packages and adapter API"
+else
+  fail "device packages and adapter API"; echo "$out"
 fi
 
 # ---- Model.js.

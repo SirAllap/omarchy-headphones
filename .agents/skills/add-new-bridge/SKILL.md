@@ -9,18 +9,19 @@ Deliver a contribution another person can review without owning these
 headphones. Start with the owner's device and observed replies, then make
 implementation, tests, documentation and the hardware report agree.
 
-Read `AGENTS.md`, `BRIDGE.md`, `docs/CANONICAL-TESTS.md` and the relevant
+Read `AGENTS.md`, `docs/ADAPTER-API.md`, `BRIDGE.md`, `docs/CANONICAL-TESTS.md`
+and the relevant
 `PROTOCOL.md` section from the repository root. They define the contract and
 required coverage; use this workflow to produce it, not a second rulebook.
 
 ## Choose the smallest integration
 
-Record the reported name, firmware when available, address and complete
-`bluetoothctl info` UUID list. Inspect the existing backend selection and
-try the supported interface first. Working battery/control may need only a
-new owner capture, pin, model documentation and gallery entry. Extend an
-existing brand bridge by a model row when its protocol fits. Create a new
-bridge only for a distinct protocol or transport that requires one.
+Start with `tools/add-device`. Record the reported name, firmware when
+available, address and complete UUID list in the new `devices/<model>/`
+package. Follow the device API v1 guide for the profile, observed model
+parameters and capability declarations. Reuse a builtin adapter when its
+existing protocol fits. Otherwise keep `adapter.py` beside the profile.
+Do not edit existing model rows or central routing to add one model.
 
 Work in an isolated clone outside the installed plugin, including Git
 metadata and generated outputs. Resolve symlinks before writing. Do not
@@ -76,8 +77,9 @@ workflows; preserve the actual supported-headphone contract.
 
 ## Test real paths and evidence
 
-Add a Session on `tests/harness.py` and the model's own pin naming its owner
-and capture. Cover exact outgoing startup and control sequences and actual
+Add the package's reviewed `session.json` with exact references to
+`capture.jsonl`; the adapter API replay runner is the new-model harness. Cover
+exact outgoing startup and control sequences and actual
 incoming replies. Reuse captured RX bytes, not the production encoder's
 reconstruction as independent evidence. Keep existing pins/captures intact.
 
@@ -102,12 +104,12 @@ These are tests of behavior, not assertions that source contains keywords.
 
 ## Complete and validate the contribution
 
-Update the new model's README row, prominent brand list, gallery image and
-credit, manifest aliases and relevant descriptions, protocol notes, bridge
-list/contract and probe instructions. Use the real owner's screenshot; never
-synthesize a hardware claim. Match every claim to a capture or explicit owner
-test. If required evidence is unavailable, document the gap and keep the
-contribution pending or draft rather than inventing evidence.
+Complete the model package: profile, identity, captures, reviewed replay,
+model fault tests, protocol notes, real screenshot, machine-written adapter
+check and owner integration observations. Run `tools/add-device sync` to
+generate the registry and README table/gallery, then `tools/add-device check`
+for the per-model report. Keep unavailable evidence explicitly pending;
+never invent it. No install or dependency changes are part of adding a model.
 
 Run `CHECK_BASE=<current-upstream-base> tools/check`. Investigate each failure
 and identify skipped tools. Check the actual test workflow on the PR head;
