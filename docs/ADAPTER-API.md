@@ -220,7 +220,7 @@ tools/check
 ```
 
 `sync` generates the single BACKENDS block and README device table/gallery.
-`check --json` and `check --markdown --summary <file>` expose the same readiness
+`check --json`, `check --github` and `check --markdown --summary <file>` expose the same readiness
 report to contributors and CI. CI checks all active packages and protects
 existing package evidence against modification. Adding a package does not
 publish a release or deploy it to the running shell.
@@ -234,3 +234,6 @@ regressions. Original bridges and their full owner suites still run separately.
 The shared transport tests use controlled endpoints, not a Bluetooth radio.
 Physical transport behavior, panel integration and new codec behavior need
 owner testing before migration. No supported model has been migrated here.
+
+See [CI checks and actionable feedback](CI-FEEDBACK.md) for automatic command
+round-trip, coalescing and session-isolation checks and how to fix failures.

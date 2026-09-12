@@ -15,8 +15,11 @@ INPUTS = {'rx', 'command', 'timer', 'event'}
 def capture(path, profile):
     events = {}
     previous = -1
-    for line in path.read_text().splitlines():
-        event = json.loads(line)
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        try:
+            event = json.loads(line)
+        except ValueError as error:
+            raise ValueError('capture.jsonl line %d: %s' % (number, error)) from error
         if not isinstance(event, dict) or not isinstance(event.get('id'), str) or event['id'] in events:
             raise ValueError('capture needs unique event ids')
         if type(event.get('timeNs')) is not int or event['timeNs'] < previous:
@@ -171,6 +174,9 @@ def execute(profile, directory, events, spec, root=ROOT, split=None):
         if fed != expected_inputs or not state_checks or asserted_tx != [r for r, e in events.items() if e['direction'] == 'tx']:
             raise ValueError('session must replay all inputs and assert complete TX and state')
         return checks
+    except (ValueError, AssertionError, KeyError, TypeError) as error:
+        error.args = ('session.json step %d: %s' % (index + 1, str(error)),)
+        raise
     finally:
         replay.session.finish(0)
 

@@ -9,13 +9,24 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            hashseed: "0"
+          - python: "3.x"
+            hashseed: "1"
+    env:
+      PYTHONHASHSEED: ${{ matrix.hashseed }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: ${{ matrix.python }}
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -23,4 +34,4 @@ jobs:
       - run: CHECK_BASE=origin/main tools/check
       - name: Device readiness report
         if: always()
-        run: tools/add-device check --base origin/main --markdown --summary "$GITHUB_STEP_SUMMARY"
+        run: tools/add-device check --base origin/main --github --markdown --summary "$GITHUB_STEP_SUMMARY"

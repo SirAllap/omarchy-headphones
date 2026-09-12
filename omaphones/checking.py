@@ -11,6 +11,12 @@ from omaphones.testing import Replay
 ALLOWED_IMPORTS = {"omaphones.api", "struct", "enum", "dataclasses", "collections", "math", "typing", "re"}
 
 
+class BoundaryError(ValueError):
+    def __init__(self, message, path, line):
+        super().__init__(message)
+        self.filename, self.lineno = str(path), line
+
+
 def check_boundary(path):
     tree = ast.parse(path.read_text(), str(path))
     for node in ast.walk(tree):
@@ -20,9 +26,9 @@ def check_boundary(path):
         elif isinstance(node, ast.ImportFrom):
             modules = [node.module or ""]
         if any(module not in ALLOWED_IMPORTS for module in modules):
-            raise ValueError(str(path) + ": adapter imports outside the protocol API: " + ", ".join(modules))
+            raise BoundaryError("adapter imports outside the protocol API: " + ", ".join(modules), path, node.lineno)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"open", "exec", "eval", "__import__", "compile", "input", "print"}:
-            raise ValueError(str(path) + ": platform operation belongs in the runtime: " + node.func.id)
+            raise BoundaryError("platform operation belongs in the runtime: " + node.func.id, path, node.lineno)
 
 
 def suite_for(adapter_id=None, root=ROOT, include_drafts=False):

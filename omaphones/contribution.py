@@ -1,5 +1,5 @@
 """One package, one readiness report. Missing evidence is a failed check."""
-import ast
+from pathlib import Path
 import io
 import json
 import re
@@ -8,6 +8,7 @@ import unittest
 
 from . import live, devices as profiles, evidence as replay
 from .registry import shell_rows
+from . import contracts, feedback
 from .checking import check_boundary
 import importlib.util
 
@@ -111,13 +112,18 @@ def readiness(directory, root=profiles.ROOT):
             result["checks"].append({"check": label, "passed": True, "detail": detail or "OK"})
             return detail
         except (Exception, SystemExit) as error:
-            result["checks"].append({"check": label, "passed": False, "detail": str(error)})
+            item = {"check": label, "passed": False, "detail": str(error),
+                    "line": getattr(error, "lineno", 1) or 1}
+            filename = getattr(error, 'filename', None)
+            if isinstance(filename, str) and Path(filename).is_relative_to(root):
+                item['file'] = str(Path(filename).relative_to(root))
+            result['checks'].append(item)
             return None
 
     profile = check("profile", lambda: profiles.load(directory))
     if profile is None:
         result["passed"] = False
-        return result
+        return feedback.decorate(result, directory, root)
     result["checks"][-1]["detail"] = "API v1"
     check("existing models", lambda: profiles.no_legacy_claim(profile, root))
 
@@ -140,6 +146,10 @@ def readiness(directory, root=profiles.ROOT):
         missing = sorted(replay.required_cases(profile) - set(checked))
         result["checks"].append({"check": "capability evidence", "passed": not missing,
                                  "detail": "missing cases: " + ", ".join(missing) if missing else "all declared controls have asserted replies"})
+    if checked is not None:
+        check("command round trips", lambda: contracts.roundtrips(profile, directory, root))
+        check("coalesced delivery", lambda: contracts.coalesced(profile, directory, root))
+        check("session isolation", lambda: contracts.isolation(profile, directory, root))
     check("fault scenarios", lambda: fault_tests(directory))
 
     def hardware():
@@ -217,7 +227,7 @@ def readiness(directory, root=profiles.ROOT):
 
     check("protocol notes", protocol_notes)
     result["passed"] = all(item["passed"] for item in result["checks"])
-    return result
+    return feedback.decorate(result, directory, root)
 
 
 def immutable(root=profiles.ROOT, base=None):
@@ -229,18 +239,26 @@ def immutable(root=profiles.ROOT, base=None):
         if not base:
             raise ValueError('no ownership baseline; supply --base')
     since = subprocess.check_output(["git", "merge-base", base, "HEAD"], cwd=root, text=True).strip()
-    changed = subprocess.check_output(["git", "diff", "--diff-filter=MDR", "--name-only", since, "--", "devices"],
+    changed = subprocess.check_output(["git", "diff", "--diff-filter=MDR", "--name-only", since, "--", "devices", "tests/pins", "docs/captures"],
                                       cwd=root, text=True).splitlines()
     protected = [p for p in changed if len(p.split("/")) >= 3]
     if protected:
-        raise ValueError("existing owner packages changed: " + ", ".join(protected))
-    return "existing owner packages unchanged"
+        error = ValueError("existing owner evidence changed: " + ", ".join(protected))
+        error.filename = protected[0]
+        raise error
+    return "existing owner packages, pins and captures unchanged"
 
 
 def markdown(reports):
-    lines = ["| Device | Check | Result | Detail |", "|:--|:--|:--|:--|"]
+    import html
+    def cell(value):
+        return html.escape(str(value)).replace('|', '&#124;').replace('\r', ' ').replace('\n', '<br>')
+    lines = ["| Device | Check | Result | File | Detail / next step |", "|:--|:--|:--|:--|:--|"]
     for report in reports:
         for item in report["checks"]:
-            detail = str(item["detail"]).replace("|", "\\|").replace("\n", " ")
-            lines.append("| %s | %s | %s | %s |" % (report["device"], item["check"], "OK" if item["passed"] else "MISSING / FAILED", detail))
-    return "\n".join(lines)
+            detail = cell(item['detail'])
+            if not item['passed']:
+                detail += '<br>Fix: ' + cell(item.get('fix', 'Resolve the reported problem.'))
+                detail += '<br>Run: <code>' + cell(item.get('reproduce', 'tools/check')) + '</code>'
+            lines.append('| %s | %s | %s | %s | %s |' % (cell(report['device']), cell(item['check']), 'OK' if item['passed'] else 'FAILED', cell(item.get('file', '')), detail))
+    return '\n'.join(lines)

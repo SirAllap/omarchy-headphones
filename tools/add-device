@@ -12,7 +12,8 @@ import time
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from omaphones import contribution, live, devices as profiles, evidence as replay
-from omaphones.registry import ID, contained, descriptors
+from omaphones.registry import ID, contained, descriptors, read_json
+from omaphones import feedback
 from omaphones.scaffold import require_isolated, initialize as create_draft
 
 
@@ -92,7 +93,7 @@ def main():
     source = init.add_mutually_exclusive_group(required=True)
     source.add_argument("--address")
     source.add_argument("--info", type=Path, help="previous complete bluetoothctl info output")
-    init.add_argument("--adapter", choices=[r["id"] for r in descriptors() if r.get("entry")])
+    init.add_argument("--adapter", help="shared protocol id, for example sony or soundcore")
     init.add_argument("--parameters", help="JSON object; only observed settings")
     init.add_argument("--model-id")
     commands.add_parser("sync", help="generate device registry and README section")
@@ -100,6 +101,7 @@ def main():
     check.add_argument("id", nargs="?")
     check.add_argument("--base", default=os.environ.get("CHECK_BASE"))
     check.add_argument("--json", action="store_true")
+    check.add_argument("--github", action="store_true", help="emit file annotations for failed checks")
     check.add_argument("--markdown", action="store_true")
     check.add_argument("--summary", type=Path, help="append the same report to a CI summary file")
     for action in ("capture", "live"):
@@ -129,21 +131,36 @@ def main():
         isolated()
         print("Updated:", ", ".join(contribution.generate(write=True)) or "already current")
     elif args.action == "check":
-        directories = [package(args.id)] if args.id else [directory for directory, _profile in profiles.packages()]
-        reports = [contribution.readiness(d) for d in directories]
+        directories = [package(args.id)] if args.id else []
+        if not args.id:
+            for directory in sorted((profiles.ROOT / 'devices').iterdir()):
+                if not directory.is_dir() or directory.name.startswith(('.', '__')):
+                    continue
+                try:
+                    if read_json(directory / 'device.json').get('status') == 'draft':
+                        continue
+                except (ValueError, OSError):
+                    pass  # Readiness emits the precise file error and continues to other models.
+                directories.append(directory)
+        reports = [contribution.readiness(d, profiles.ROOT) for d in directories]
         repo = {"device": "repository", "checks": []}
         for name, fn in (("generated registry/gallery", contribution.generate),
-                         ("owner packages", lambda: contribution.immutable(base=args.base))):
+                         ("owner evidence", lambda: contribution.immutable(base=args.base))):
             try:
                 detail = fn()
                 repo["checks"].append({"check": name, "passed": True, "detail": detail or "OK"})
             except Exception as error:
-                repo["checks"].append({"check": name, "passed": False, "detail": str(error)})
+                repo["checks"].append({"check": name, "passed": False, "detail": str(error),
+                    "file": getattr(error, "filename", None) or ("Model.js" if name == "generated registry/gallery" else "devices/README.md"),
+                    "fix": "Fix package errors above, then run tools/add-device sync." if name == "generated registry/gallery" else "Restore the named owner's evidence from the base revision; add your own evidence separately.",
+                    "reproduce": "tools/add-device check --base " + (args.base or 'origin/main')})
         repo["passed"] = all(c["passed"] for c in repo["checks"])
         reports.append(repo)
         if args.summary:
             with args.summary.open("a") as output:
                 output.write(contribution.markdown(reports) + "\n")
+        if args.github:
+            print(feedback.annotations(reports))
         if args.json:
             print(json.dumps(reports, indent=2))
         elif args.markdown:
@@ -152,6 +169,8 @@ def main():
             for report in reports:
                 for item in report["checks"]:
                     print("%s  %s: %s — %s" % ("OK" if item["passed"] else "MISSING/FAILED", report["device"], item["check"], item["detail"]))
+                    if not item["passed"]:
+                        print("  %s:%s — %s Run: %s" % (item.get("file", ""), item.get("line", 1), item.get("fix", ""), item.get("reproduce", "tools/check")))
         return 0 if all(r["passed"] for r in reports) else 1
     elif args.action == "session":
         isolated()
