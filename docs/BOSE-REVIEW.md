@@ -18,12 +18,25 @@ them with explicitly synthetic transport faults and recorded reply payloads.
 
 ## Evidence limits
 
-The stored capture proves decoded 90% battery and mode 0–3 replies, including
-return to mode 1. It does not include full raw RX headers, a complete UUID
-listing, 89% battery or the described failed-channel traces. The original pin
-contains an 89% sample: it remains the author's record, but the capture does
-not corroborate it. Please supply that recording or explicitly identify the
-sample as synthetic in an owner-authored follow-up. Do not invent it.
+The [original capture](captures/bose-qc45.txt) contains decoded 90% battery
+and mode 0–3 replies, including return to mode 1. In the
+[owner confirmation](https://github.com/ncr/omarchy-headphones/pull/13#issuecomment-5648598888),
+@Driskol explicitly identified the pin's `59 ff ff 00` (89%) battery sample
+as synthetic, derived from the real 90% reply. It tests battery changes and
+is not an observed reply. The original pin and capture remain unchanged.
+
+Commit `d663c6d` adds a [raw session](captures/bose-qc45-session.txt) recorded
+with review revision `fc8d7f9`: init, 100% battery, the complete GET-All burst,
+mode 0–3 readbacks and verified restoration to initial mode 1. Its raw chunks
+decode to the 25 listed frames without trailing bytes. The separate
+[Profile1 traces](captures/bose-qc45-channels.txt) record the DETECT prelude
+on the deca-fade UUID and silence on the other vendor UUID.
+
+The complete `bluetoothctl info` output mentioned in the owner's comment
+is absent from these files. The vendor UUIDs have connection traces, but the
+full UUID list in the routing test lacks a stored SDP listing. The maintainer
+explicitly accepted this evidence gap for 1.3.2. This is a documented exception
+for this contribution, not a replacement for the canonical capture requirement.
 
 Channel 8 is confirmed. Candidates 2/9 are exploratory, not proof of another
 model's support. Charging, acoustic effects, peer isolation and behavior while
@@ -32,17 +45,28 @@ Quiet/ANC and Aware/Ambient. The original screenshot is retained.
 
 ## Owner test on the repaired revision
 
-Use the exact repair commit supplied in the PR message. Save initial settings.
+On 2026-09-12, @Driskol confirmed the following on QC45
+`AC:BF:71:64:56:B9` with `fc8d7f9`:
 
-1. Connect QC45 and confirm battery plus the ANC/Ambient row appear.
-2. Switch both ways; verify the panel follows the reported mode. Try the
-   headset's own mode button and check the next poll follows it.
-3. Disconnect/reconnect and confirm control returns. Disable/re-enable mode
-   control during startup and confirm no old bridge retains the channel.
-4. Run `tools/bose_session.py ADDRESS` with mode control disabled; provide
-   the raw log and complete `bluetoothctl info ADDRESS` output. Confirm the
-   original mode is restored; report failures or skipped checks explicitly.
-5. Restore the plugin setting and headphone mode used before testing.
+1. Connection and bridge battery reporting worked; status showed 100%.
+2. Both ANC and Ambient commands worked, with subsequent `modeFor` readback.
+   The physical Action button changed the mode and the next poll followed it.
+3. Disconnect ended the bridge with exit 1 and left no process. Reconnect
+   started a fresh bridge and restored working control.
+4. Starting the shell with `useModeControl: false` started no bridge and left
+   channel 8 available to the capture tool. Restoring the setting started a
+   new bridge and restored control. This report does not separately demonstrate
+   interruption during an in-flight socket connection; synthetic tests cover
+   stopping during connect and probe.
+5. The raw session restored and verified the initial mode. The owner confirmed
+   restoration of the original widget setting and headphone mode (Aware).
 
-Do not merge or bump the version until the owner confirms the repaired
-transport/control revision. Software checks cannot replace this test.
+Reported state was checked through the follower's IPC (`modeFor`), not by
+visually inspecting the rendered panel on the repaired revision. The original
+screenshot remains available; this PR does not change the panel's QML.
+
+The maintainer accepted the owner confirmation and the documented limits for
+1.3.2. The final review update changes documentation only, so it does not
+require another hardware run. Local checks passed 156 Python tests and 57
+Model.js tests, QML lint and plugin validation; the full PR CI check also
+passed on `d663c6d`. These software results do not replace the owner's test.

@@ -1521,7 +1521,8 @@ Commands on stdin: `set anc|ambient`. Exit codes match the other bridges: 0
 clean, 1 transient, 3 parked (sockets opened but no `[0.1]` answer, or no mode
 answer in ten seconds), 4 setup. `tests/bose_bridge_test.py` pins the probe, the
 two queries, the STARTs and the answers above frame for frame, and
-`tests/pins/bose/qc45.json` freezes the live wire from the capture below.
+`tests/pins/bose/qc45.json` replays the decoded replies from the original
+capture plus a synthetic 89% battery-change sample, identified below.
 
 ### The capture
 
@@ -1529,9 +1530,24 @@ two queries, the STARTs and the answers above frame for frame, and
 init, 90% battery, mode GETs, START/PROCESSING/readbacks for indexes 0–3,
 and the GET-All burst. The original session ended with a verified return to
 Aware. RX headers are reconstructed in the pin from decoded fields; the file
-is not a complete raw-byte capture. It does not contain the pin's 89% sample,
-the UUID listing or the claimed failed-channel recordings. These gaps require
-owner evidence; they must not be silently filled in by the reviewer.
+is not a complete raw-byte capture. In the
+[owner confirmation](https://github.com/ncr/omarchy-headphones/pull/13#issuecomment-5648598888),
+@Driskol explicitly identified the pin's `59 ff ff 00` (89%) sample as
+synthetic, derived from the observed 90% reply. It is a battery-change test,
+not an observed device reply; the original pin remains unchanged.
+
+The owner added two recordings in `d663c6d`, made with review revision
+`fc8d7f9`: [`bose-qc45-session.txt`](docs/captures/bose-qc45-session.txt)
+contains complete raw RX chunks and decoded frames for initialization, 100%
+battery, GET-All, mode 0–3 readbacks and verified restoration to initial mode
+1; [`bose-qc45-channels.txt`](docs/captures/bose-qc45-channels.txt) records
+the repeating DETECT prelude and silent Profile1 service described above.
+
+The complete `bluetoothctl info` output mentioned in the owner's comment is
+absent from the supplied files. The two vendor UUIDs have connection traces,
+but the full UUID list in the routing test is not independently corroborated
+by a stored SDP listing. The maintainer explicitly accepted this evidence
+gap for QC45 support in 1.3.2; no missing output was reconstructed.
 
 The updated [`tools/bose_session.py`](tools/bose_session.py) logs raw chunks
 at receipt, retains partial frames and restores the actual initial mode in
@@ -1540,8 +1556,8 @@ before using it. Channel 8 is observed on this QC45; fallback candidates 2/9
 remain unverified on it. `bose_probe.py` is a diagnostic for the unsuccessful
 Profile1 route, not the recommended QC45 capture tool.
 
-See [the review and owner checklist](docs/BOSE-REVIEW.md) for test coverage
-and outstanding hardware confirmation.
+See [the review and owner confirmation](docs/BOSE-REVIEW.md) for the owner's
+test results on `fc8d7f9`, software coverage and remaining evidence limits.
 
 ## Canonical owner captures — 2026-09-08
 
