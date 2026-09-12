@@ -1,0 +1,53 @@
+{
+  "apiVersion": 1,
+  "id": "soundcore",
+  "priority": 50,
+  "match": {
+    "uuidPrefix": "0cf12d31-fac3-4553-bd80-d6832e7"
+  },
+  "legacy": {
+    "bridge": "soundcore-bridge",
+    "args": [
+      "address"
+    ],
+    "ambient": {
+      "min": 1,
+      "max": 5,
+      "voice": "Wind noise reduction"
+    },
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      },
+      "ambient.level": {
+        "type": "number",
+        "field": "level",
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "command": "level"
+      },
+      "noise.wind_reduction": {
+        "type": "boolean",
+        "field": "voice",
+        "command": "wind"
+      }
+    }
+  },
+  "status": "active",
+  "migration": "legacy process; owner-confirmed transport migration pending"
+}

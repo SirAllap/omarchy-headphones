@@ -130,6 +130,7 @@ Panel {
   // that distinguishes a device with a dial from one without.
   readonly property int ambientLevel: current ? current.ambientLevel : -1
   readonly property bool ambientVoice: current ? current.ambientVoice : false
+  readonly property bool ambientToggleAvailable: current ? current.ambientToggleAvailable : false
   readonly property bool ambientControls: current ? current.ambientControls : false
   // The dial's range and the switch's name, which differ by brand (Sony 0-20
   // and Focus on voice; Soundcore 1-5 and Wind noise reduction).
@@ -236,8 +237,10 @@ Panel {
     // they are named only then: a hint that listed them the rest of the time
     // would be offering keys that do nothing. Same for the strengths and the
     // latency switch.
-    if (ambientRowVisible)
-      parts.push("[ ] Level", ambientVoiceLabel === "Focus on voice" ? "f Voice" : "f Wind")
+    if (ambientRowVisible) {
+      parts.push("[ ] Level")
+      if (ambientToggleAvailable) parts.push(ambientVoiceLabel === "Focus on voice" ? "f Voice" : "f Wind")
+    }
     for (var j = 0; j < ancLevelOptions.length; j++)
       if (levelRowVisible) parts.push(ancLevelOptions[j].key + " " + ancLevelOptions[j].label)
     if (latencyRowVisible) parts.push("g Latency")
@@ -826,7 +829,8 @@ Panel {
 
             Item {
               width: parent.width
-              implicitHeight: Math.max(voiceLabel.implicitHeight, voiceSwitch.implicitHeight)
+              visible: root.ambientToggleAvailable
+              implicitHeight: visible ? Math.max(voiceLabel.implicitHeight, voiceSwitch.implicitHeight) : 0
 
               Text {
                 id: voiceLabel

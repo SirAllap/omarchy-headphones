@@ -467,57 +467,342 @@ function uuidsFromBluetoothctl(text) {
   return out
 }
 
-// ---- The brands, one row each.
-//
-// A row says how a device is recognised — the UUIDs in its SDP record, or a
-// prefix of one; for JBL a BLE address the Fast Pair stream announced — which
-// bridge is run for it, what that bridge takes on its command line, and what
-// the panel's Ambient row looks like on it (the dial's range and the name of
-// the switch beside it; absent means the Sony shape, 0-20 and Focus on voice).
-//
-// Order matters. The first row whose claim the device's record carries wins,
-// and the BLE-address row comes last because every Fast Pair device has an
-// address whether or not it answers a mode query. Sony is first because its
-// UUID is the strongest statement a headset makes; a new brand goes where its
-// claim cannot take another brand's device — tests/model.test.js pins, for
-// every brand, that its own UUIDs still pick it.
-//
-// Adding a brand is adding a row here and the bridge file the row names; the
-// shell reads everything else off the row. tools/check reads the rows too:
-// each names a bridge that exists, with a test file and a pin.
-//
-// The argument names a row lists are filled by bridgeArgs() from what the
-// follower knows: "address" is the Classic address, "uuid" the Sony MDR
-// generation from sonyUuidFor(), "name" the name the headset reports (which
-// picks its row in the bridge's MODELS), "bleAddress" and "modelId" the two
-// things the Fast Pair stream announces. A bridge that gets one argument
-// today keeps getting one unless its model selection needs the reported name.
-// Nothing accepts that name optionally; a nameless caller retains channel 15.
+// Adapter routing is generated from adapters/*/adapter.json by
+// tools/build-adapter-registry. Package metadata owns claims, launch arguments
+// and legacy control spellings. Do not add a hand-written row here.
+// Exact UUID and prefix claims retain their historical precedence; the broad
+// BLE-address fallback is last. Owner device UUID tests pin that selection.
+// BEGIN GENERATED ADAPTER REGISTRY
 var BACKENDS = [
-  { name: "sony", bridge: "sony-bridge",
-    uuids: [SONY_MDR_V2_UUID, SONY_MDR_V1_UUID],
-    args: ["address", "uuid", "name"],
-    ambient: { min: 0, max: 20, voice: "Focus on voice" } },
-  { name: "samsung", bridge: "samsung-bridge",
-    uuids: [SAMSUNG_SPP_UUID], args: ["address"] },
-  { name: "nothing", bridge: "nothing-bridge",
-    uuids: [NOTHING_NT_LINK_UUID], args: ["address", "name"] },
-  { name: "xiaomi", bridge: "xiaomi-bridge",
-    uuids: [CSR_GAIA_UUID], args: ["address"] },
-  { name: "soundcore", bridge: "soundcore-bridge",
-    uuidPrefix: SOUNDCORE_UUID_PREFIX, args: ["address"],
-    ambient: { min: 1, max: 5, voice: "Wind noise reduction" } },
-  { name: "oppo", bridge: "oppo-bridge",
-    uuids: [OPPO_HEYMELODY_UUID], args: ["address"] },
-  { name: "bose", bridge: "bose-bridge",
-    // BMAP lives on a raw RFCOMM channel, not on a claimed UUID; the two
-    // claims are the QC45's actual vendor UUIDs. The first also serves an
-    // iAP2-style DETECT channel that is not BMAP — the bridge probes its
-    // channel candidates with BMAP itself.
-    uuids: [BOSE_BMAP_UUID, BOSE_SPP_UUID], args: ["address"] },
-  { name: "jbl", bridge: "jbl-bridge",
-    ble: true, args: ["bleAddress", "modelId"] }
+  {
+    "name": "sony",
+    "bridge": "sony-bridge",
+    "uuids": [
+      "956c7b26-d49a-4ba8-b03f-b17d393cb6e2",
+      "96cc203e-5068-46ad-b32d-e316f5e069ba"
+    ],
+    "args": [
+      "address",
+      "uuid",
+      "name"
+    ],
+    "runtime": true,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      },
+      "ambient.level": {
+        "type": "number",
+        "field": "level",
+        "min": 0,
+        "max": 20,
+        "step": 1,
+        "command": "level"
+      },
+      "ambient.focus_on_voice": {
+        "type": "boolean",
+        "field": "voice",
+        "command": "voice"
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "ambient": {
+      "min": 0,
+      "max": 20,
+      "voice": "Focus on voice"
+    },
+    "uuidPreference": [
+      "956c7b26-d49a-4ba8-b03f-b17d393cb6e2",
+      "96cc203e-5068-46ad-b32d-e316f5e069ba"
+    ]
+  },
+  {
+    "name": "samsung",
+    "bridge": "samsung-bridge",
+    "uuids": [
+      "2e73a4ad-332d-41fc-90e2-16bef06523f2"
+    ],
+    "args": [
+      "address"
+    ],
+    "runtime": false,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "uuidPreference": [
+      "2e73a4ad-332d-41fc-90e2-16bef06523f2"
+    ]
+  },
+  {
+    "name": "nothing",
+    "bridge": "nothing-bridge",
+    "uuids": [
+      "aeac4a03-dff5-498f-843a-34487cf133eb"
+    ],
+    "args": [
+      "address",
+      "name"
+    ],
+    "runtime": false,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      },
+      "anc.strength": {
+        "type": "enum",
+        "field": "ancLevel",
+        "choicesField": "ancLevels",
+        "command": "level"
+      },
+      "audio.low_latency": {
+        "type": "boolean",
+        "field": "latency",
+        "command": "latency"
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "uuidPreference": [
+      "aeac4a03-dff5-498f-843a-34487cf133eb"
+    ]
+  },
+  {
+    "name": "xiaomi",
+    "bridge": "xiaomi-bridge",
+    "uuids": [
+      "00001100-d102-11e1-9b23-00025b00a5a5"
+    ],
+    "args": [
+      "address"
+    ],
+    "runtime": false,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "uuidPreference": [
+      "00001100-d102-11e1-9b23-00025b00a5a5"
+    ]
+  },
+  {
+    "name": "soundcore",
+    "bridge": "soundcore-bridge",
+    "uuidPrefix": "0cf12d31-fac3-4553-bd80-d6832e7",
+    "args": [
+      "address"
+    ],
+    "runtime": false,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      },
+      "ambient.level": {
+        "type": "number",
+        "field": "level",
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "command": "level"
+      },
+      "noise.wind_reduction": {
+        "type": "boolean",
+        "field": "voice",
+        "command": "wind"
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "ambient": {
+      "min": 1,
+      "max": 5,
+      "voice": "Wind noise reduction"
+    },
+    "uuidPreference": []
+  },
+  {
+    "name": "oppo",
+    "bridge": "oppo-bridge",
+    "uuids": [
+      "0000079a-d102-11e1-9b23-00025b00a5a5"
+    ],
+    "args": [
+      "address"
+    ],
+    "runtime": false,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "uuidPreference": [
+      "0000079a-d102-11e1-9b23-00025b00a5a5"
+    ]
+  },
+  {
+    "name": "bose",
+    "bridge": "bose-bridge",
+    "uuids": [
+      "00000000-deca-fade-deca-deafdecacaff",
+      "9b26d8c0-a8ed-440b-95b0-c4714a518bcc"
+    ],
+    "args": [
+      "address"
+    ],
+    "runtime": false,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      }
+    },
+    "needsBleAddress": false,
+    "supportCache": "",
+    "uuidPreference": [
+      "00000000-deca-fade-deca-deafdecacaff",
+      "9b26d8c0-a8ed-440b-95b0-c4714a518bcc"
+    ]
+  },
+  {
+    "name": "jbl",
+    "bridge": "jbl-bridge",
+    "ble": true,
+    "args": [
+      "bleAddress",
+      "modelId"
+    ],
+    "runtime": true,
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      }
+    },
+    "needsBleAddress": true,
+    "supportCache": "fast-pair-model",
+    "uuidPreference": []
+  }
 ]
+// END GENERATED ADAPTER REGISTRY
 
 var AMBIENT_DEFAULT = { min: 0, max: 20, voice: "Focus on voice" }
 
@@ -555,7 +840,7 @@ function controlBackend(uuids, bleAddress) {
 // own channel — everything but JBL, whose bridge dials a BLE address.
 var CLASSIC_BACKENDS = []
 for (var backendIndex = 0; backendIndex < BACKENDS.length; backendIndex++)
-  if (!BACKENDS[backendIndex].ble) CLASSIC_BACKENDS.push(BACKENDS[backendIndex].name)
+  if (!BACKENDS[backendIndex].needsBleAddress) CLASSIC_BACKENDS.push(BACKENDS[backendIndex].name)
 
 function isClassicBackend(backend) {
   return CLASSIC_BACKENDS.indexOf(str(backend)) !== -1
@@ -672,4 +957,77 @@ function bridgeCharging(state, key) {
 function bridgeCaseStale(state) {
   var battery = state ? state.battery : undefined
   return !!battery && typeof battery === "object" && battery.caseStale === true
+}
+
+// API v1: the shell knows capabilities and identity, never protocol commands.
+function runnerFor(backend) {
+  var row = backendRow(backend)
+  return row ? (row.runtime ? "omaphones-device" : row.bridge) : ""
+}
+
+function transportUuidFor(backend, uuids) {
+  var row = backendRow(backend)
+  var preferences = row ? row.uuidPreference || [] : []
+  var ids = (uuids || []).map(function (id) { return str(id).toLowerCase() })
+  for (var i = 0; i < preferences.length; i++)
+    if (ids.indexOf(preferences[i]) !== -1) return preferences[i]
+  return ""
+}
+
+function runnerArgs(backend, context) {
+  var row = backendRow(backend)
+  if (!row) return []
+  return row.runtime ? [backend, "--context", JSON.stringify(context || {})] : bridgeArgs(backend, context)
+}
+
+function controlCapabilities(backend, state) {
+  if (!state) return {}
+  if (state.apiVersion === 1 && state.capabilities) return state.capabilities
+  // Temporary translation for bridges still on BRIDGE.md's original contract.
+  var row = backendRow(backend)
+  var specs = row ? row.controls || {} : {}
+  var out = {}
+  for (var key in specs) {
+    var spec = specs[key]
+    var value = state[spec.field]
+    if (value === undefined || value === null) continue
+    var cap = {}
+    if (spec.type === "enum") {
+      cap.values = state[spec.choicesField] || spec.choices
+      if (!cap.values || cap.values.indexOf(value) === -1) continue
+    } else if (spec.type === "number") {
+      if (typeof value !== "number" || !isFinite(value) || value < spec.min || value > spec.max) continue
+      cap.min = spec.min; cap.max = spec.max; cap.step = spec.step
+    } else {
+      if (typeof value !== "boolean") continue
+      cap.type = "boolean"
+    }
+    if (spec.readOnly) cap.readOnly = true
+    out[key] = cap
+  }
+  return out
+}
+
+function controlValue(backend, state, key) {
+  if (state && state.apiVersion === 1) return state.values ? state.values[key] : undefined
+  var row = backendRow(backend)
+  var spec = row && row.controls ? row.controls[key] : null
+  return state && spec ? state[spec.field] : undefined
+}
+
+function controlCommand(backend, state, key, value) {
+  var caps = controlCapabilities(backend, state)
+  var spec = caps[key]
+  if (!spec || spec.readOnly || controlValue(backend, state, key) === undefined) return ""
+  if (spec.values) {
+    if (spec.values.indexOf(value) === -1) return ""
+  } else if (spec.type === "boolean") {
+    if (typeof value !== "boolean") return ""
+  } else if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value
+      || value < spec.min || value > spec.max || (value - spec.min) % spec.step !== 0) return ""
+  var row = backendRow(backend)
+  if (row.runtime)
+    return JSON.stringify({ apiVersion: 1, control: key, value: value }) + "\n"
+  var legacy = row.controls[key]
+  return legacy.command + " " + (typeof value === "boolean" ? (value ? "on" : "off") : str(value)) + "\n"
 }

@@ -1,0 +1,84 @@
+{
+  "apiVersion": 1,
+  "id": "sony",
+  "priority": 10,
+  "match": {
+    "uuids": [
+      "956c7b26-d49a-4ba8-b03f-b17d393cb6e2",
+      "96cc203e-5068-46ad-b32d-e316f5e069ba"
+    ]
+  },
+  "legacy": {
+    "bridge": "sony-bridge",
+    "args": [
+      "address",
+      "uuid",
+      "name"
+    ],
+    "ambient": {
+      "min": 0,
+      "max": 20,
+      "voice": "Focus on voice"
+    },
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      },
+      "ambient.level": {
+        "type": "number",
+        "field": "level",
+        "min": 0,
+        "max": 20,
+        "step": 1,
+        "command": "level"
+      },
+      "ambient.focus_on_voice": {
+        "type": "boolean",
+        "field": "voice",
+        "command": "voice"
+      }
+    }
+  },
+  "status": "active",
+  "entry": "protocol.py",
+  "transport": {
+    "kind": "bluez-profile",
+    "uuidPreference": [
+      "956c7b26-d49a-4ba8-b03f-b17d393cb6e2",
+      "96cc203e-5068-46ad-b32d-e316f5e069ba"
+    ],
+    "profilePath": "/io/github/ncr/omaphones/sony",
+    "name": "Omaphones Sony",
+    "replyTimeout": 5,
+    "connectTimeout": 30,
+    "connectDelay": 500,
+    "connectRetry": 1500,
+    "connectAttempts": 10
+  },
+  "unknownModel": {
+    "wear": true
+  },
+  "namelessModel": {
+    "wear": false
+  },
+  "parameterSchema": {
+    "wear": {
+      "type": "boolean",
+      "required": true
+    }
+  }
+}

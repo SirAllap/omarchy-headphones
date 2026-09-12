@@ -785,6 +785,12 @@ Deno.test("every backend row names a bridge that exists, with a test file and a 
   const root = new URL("../", import.meta.url);
   for (const row of Model.BACKENDS) {
     assertEquals(typeof row.name, "string", "name");
+    if (row.runtime && row.bridge === "omaphones-device") {
+      const adapter = JSON.parse(Deno.readTextFileSync(new URL("adapters/" + row.name + "/adapter.json", root)));
+      assertEquals(adapter.apiVersion, 1);
+      assertEquals(Deno.statSync(new URL("adapters/" + row.name + "/" + adapter.entry, root)).isFile, true);
+      continue; // Native package tests and pins are checked by tools/check-adapter.
+    }
     assertEquals(row.bridge, row.name + "-bridge", row.name + ": bridge file name");
     assertEquals(Deno.statSync(new URL(row.bridge, root)).isFile, true, row.bridge);
     assertEquals(
@@ -1029,5 +1035,56 @@ Deno.test('canonical Sony and JBL SDP records select their own bridge', async ()
     }), brand === 'sony'
       ? [fixture.address, Model.SONY_MDR_V2_UUID, 'WH-CH720N']
       : [ble, '71f20a']);
+  }
+});
+
+Deno.test("adapter host arguments preserve identity as JSON and UUID preference", () => {
+  const context = { address: "AA:BB:CC:DD:EE:FF", name: 'Sony "quoted" headset', uuid: Model.SONY_MDR_V1_UUID };
+  assertEquals(Model.runnerFor("sony"), "omaphones-device");
+  assertEquals(Model.runnerFor("jbl"), "omaphones-device");
+  assertEquals(Model.runnerFor("nothing"), "nothing-bridge");
+  assertEquals(Model.runnerFor("missing"), "");
+  const args = Model.runnerArgs("sony", context);
+  assertEquals(args.slice(0, 2), ["sony", "--context"]);
+  assertEquals(JSON.parse(args[2]), context);
+  assertEquals(Model.transportUuidFor("sony", [Model.SONY_MDR_V1_UUID, Model.SONY_MDR_V2_UUID]), Model.SONY_MDR_V2_UUID);
+  assertEquals(Model.runnerArgs("nothing", context), [context.address, context.name]);
+});
+
+Deno.test("API capabilities gate commands and keep voice and wind distinct", () => {
+  const state = { apiVersion: 1, values: {"noise.mode": "anc", "ambient.level": 14, "ambient.focus_on_voice": false, "wear.detected": true},
+    capabilities: {"noise.mode": {values: ["off", "anc", "ambient"]}, "ambient.level": {min: 0, max: 20, step: 1},
+      "ambient.focus_on_voice": {type: "boolean"}, "wear.detected": {type: "boolean", readOnly: true}} };
+  const command = JSON.parse(Model.controlCommand("sony", state, "ambient.level", 5));
+  assertEquals(command, {apiVersion: 1, control: "ambient.level", value: 5});
+  assertEquals(state.values["ambient.level"], 14);
+  for (const [key, value] of [["ambient.level", 21], ["ambient.level", NaN], ["ambient.level", 1.5],
+      ["noise.mode", "talkthru"], ["wear.detected", false], ["noise.wind_reduction", true], ["ambient.focus_on_voice", "on"]]) {
+    assertEquals(Model.controlCommand("sony", state, key, value), "");
+  }
+  assertEquals(Model.controlCommand("sony", {}, "noise.mode", "anc"), "");
+});
+
+Deno.test("legacy capabilities preserve the existing command bytes", () => {
+  const soundcore = {mode: "ambient", available: ["off", "anc", "ambient"], level: 3, voice: false};
+  assertEquals(Model.controlCommand("soundcore", soundcore, "noise.wind_reduction", true), "wind on\n");
+  assertEquals(Model.controlCommand("soundcore", soundcore, "ambient.level", 4), "level 4\n");
+  assertEquals(Model.controlCommand("soundcore", soundcore, "ambient.focus_on_voice", true), "");
+  const nothing = {mode: "anc", available: ["off", "anc", "ambient"], ancLevel: "high", ancLevels: ["low", "mid", "high", "adaptive"], latency: false};
+  assertEquals(Model.controlCommand("nothing", nothing, "anc.strength", "low"), "level low\n");
+  assertEquals(Model.controlCommand("nothing", nothing, "audio.low_latency", true), "latency on\n");
+  assertEquals(Model.controlCommand("nothing", {mode: "anc"}, "audio.low_latency", true), "");
+});
+
+Deno.test("new runtime adapter uses capabilities without brand branches", () => {
+  const row = {name: "synthetic-test", bridge: "omaphones-device", runtime: true, args: [], uuids: ["10000000-0000-0000-0000-000000000001"]};
+  Model.BACKENDS.unshift(row);
+  try {
+    const state = {apiVersion: 1, values: {"noise.mode": "off"}, capabilities: {"noise.mode": {values: ["off", "anc"]}}};
+    assertEquals(Model.controlBackend(row.uuids, ""), row.name);
+    assertEquals(Model.runnerFor(row.name), "omaphones-device");
+    assertEquals(JSON.parse(Model.controlCommand(row.name, state, "noise.mode", "anc")), {apiVersion: 1, control: "noise.mode", value: "anc"});
+  } finally {
+    Model.BACKENDS.shift();
   }
 });

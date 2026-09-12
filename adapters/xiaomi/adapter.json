@@ -1,0 +1,37 @@
+{
+  "apiVersion": 1,
+  "id": "xiaomi",
+  "priority": 40,
+  "match": {
+    "uuids": [
+      "00001100-d102-11e1-9b23-00025b00a5a5"
+    ]
+  },
+  "legacy": {
+    "bridge": "xiaomi-bridge",
+    "args": [
+      "address"
+    ],
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      }
+    }
+  },
+  "status": "active",
+  "migration": "legacy process; owner-confirmed transport migration pending"
+}

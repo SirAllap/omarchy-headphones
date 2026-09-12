@@ -1,0 +1,18 @@
+{
+  "id": "tune230nc-tws",
+  "match": {
+    "name": "JBL TUNE230NC TWS"
+  },
+  "parameters": {},
+  "owners": [
+    "ncr"
+  ],
+  "pins": [
+    "tests/pins/jbl/tune230nc-tws.json",
+    "tests/pins/jbl/tune230nc-tws-canonical.json"
+  ],
+  "captures": [
+    "docs/captures/jbl-tune230nc-tws.txt"
+  ],
+  "evidence": "existing"
+}

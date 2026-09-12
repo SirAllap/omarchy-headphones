@@ -163,27 +163,26 @@ Item {
   //      them the backend names — the file and the arguments are the backend's
   //      row in BACKENDS in Model.js; only the JBL one, which dials a BLE
   //      address the reader announces, has a lifecycle of its own.
-  readonly property string jblBridgePath: service ? service.jblBridgePath : ""
+  readonly property string bleBridgePath: service && !classicBackend ? service.bridgePathFor(controlBackend) : ""
   readonly property string classicBridgePath: service && classicBackend
     ? service.bridgePathFor(controlBackend) : ""
   property var ancState: ({})
   property bool ancEnabled: true
-  readonly property bool jblWanted: useModeControl && useFastPair && ancEnabled && connected
-    && controlBackend === "jbl"
+  readonly property bool bleWanted: useModeControl && useFastPair && ancEnabled && connected
+    && controlBackend !== "" && !classicBackend
     && bleAddress !== ""
-    && modeSupportKnown !== 0
-    && !ancModelParked
-  property bool jblArmed: false
-  onJblWantedChanged: {
-    if (!jblWanted) { jblArmed = false; return }
-    Qt.callLater(function () { jblArmed = follower.jblWanted })
+    && (cacheByModel ? modeSupportKnown !== 0 && !ancModelParked : !addressParked)
+  property bool bleArmed: false
+  onBleWantedChanged: {
+    if (!bleWanted) { bleArmed = false; return }
+    Qt.callLater(function () { bleArmed = follower.bleWanted })
   }
   property bool ancRestartWanted: false
   property bool ancAnswered: false
   property string ancRunError: ""
   property string ancErrorRaw: ""
   property bool classicEnabled: true
-  // Same delayed arm as jblArmed: `command` and `running` both depend on the
+  // Same delayed arm as bleArmed: `command` and `running` both depend on the
   // SDP probe, and QML does not promise which binding settles first. Seen live
   // on a WH-1000XM5, the Process started as QList("", address) before the
   // UUIDs arrived and then never ran sony-bridge.
@@ -201,11 +200,9 @@ Item {
   property var deviceUuids: []
   readonly property string controlBackend: Model.controlBackend(deviceUuids, bleAddress)
   readonly property bool classicBackend: Model.isClassicBackend(controlBackend)
-  // Which of Sony's two MDR services this device serves. Both read as "sony",
-  // and both come out of the same UUID list, so this is non-empty exactly when
-  // controlBackend is "sony": the bridge is sent an address, or an address and
-  // a UUID, and never a UUID belonging to some other brand's bridge.
-  readonly property string sonyUuid: controlBackend === "sony" ? Model.sonyUuidFor(deviceUuids) : ""
+  // The adapter declares its transport UUID preference; the shell supplies
+  // only a UUID actually advertised by this device.
+  readonly property string transportUuid: Model.transportUuidFor(controlBackend, deviceUuids)
 
   readonly property bool ancSupported: ancState.modes === true
   readonly property string ancMode: String(ancState.mode || "")
@@ -232,7 +229,8 @@ Item {
   // level, and a JBL pair's Ambient Aware is a mode with no amount to it. The
   // panel draws the dial and the voice switch on this, and nothing on a device
   // that never mentioned either.
-  readonly property bool ambientControls: ancLive && ambientLevel >= 0
+  readonly property bool ambientControls: ancLive && !!capabilities["ambient.level"] && ambientLevel >= 0
+  readonly property bool ambientToggleAvailable: ancLive && ambientToggle !== ""
 
   // On the ears or not, from a wear sensor — confirmed on the Sony WH-1000XM6,
   // over the same SYSTEM status channel as the listening mode. Undefined until
@@ -269,17 +267,21 @@ Item {
   // How long to wait before the next attempt, keyed by whatever identifies the
   // device for the backend in play — the Fast Pair model for the JBL bridge, the
   // Classic address for the others.
-  readonly property string ancBackoffKey: classicBackend ? address : modelId
+  readonly property bool cacheByModel: {
+    var row = Model.backendRow(controlBackend)
+    return !!row && row.supportCache === "fast-pair-model"
+  }
+  readonly property string ancBackoffKey: cacheByModel ? modelId : address
 
   // ---- The Ambient dial's range and the switch beside it, which differ by
   //      brand: Sony's dial runs 0-20 and its switch lifts voices out of the
   //      room; Soundcore's runs 1-5 and its switch cuts wind noise. Both are
   //      "how much comes through, and one filter on it", so they share a row
   //      and the panel takes the numbers and the label from here.
-  readonly property var ambientRange: Model.ambientRange(controlBackend)
+  readonly property var ambientRange: capabilities["ambient.level"] || { min: 0, max: 0 }
   readonly property int ambientMin: ambientRange.min
   readonly property int ambientMax: ambientRange.max
-  readonly property string ambientVoiceLabel: ambientRange.voice
+  readonly property string ambientVoiceLabel: ambientToggle === "noise.wind_reduction" ? "Wind noise reduction" : "Focus on voice"
 
   readonly property int bluezLevel: Model.batteryLevel(device)
   // The bar carries one number: the headset's own figure where there is only
@@ -461,64 +463,33 @@ Item {
     if (readingStamp === 0 || Date.now() - readingStamp > stalerThanMs) refresh()
   }
 
-  // The Classic-channel bridge is live for this backend: the one place a write
-  // to Sony's dial, Nothing's strength or either's mode can go.
-  function classicLive(backend) {
-    return ancLive && classicBridge.running && controlBackend === backend
-  }
+  // Capabilities select the command and range. Protocol spellings belong to
+  // the adapter or its legacy metadata, never to this follower.
+  readonly property var capabilities: Model.controlCapabilities(controlBackend, ancState)
+  readonly property string ambientToggle: capabilities["ambient.focus_on_voice"]
+    ? "ambient.focus_on_voice" : (capabilities["noise.wind_reduction"] ? "noise.wind_reduction" : "")
 
-  // True only when the write actually went out, so callers can say "unavailable"
-  // rather than pretend the device was told. A mode this device does not offer
-  // is not a write: the Sony over-ear has no TalkThru, and sending one would be
-  // a command the headset answers by doing nothing.
-  function setAncMode(mode) {
-    if (!ancSupported || !ancLive) return false
-    if (modesAvailable.indexOf(String(mode)) === -1) return false
-    if (classicBridge.running) classicBridge.write("set " + mode + "\n")
-    else ancBridge.write("set " + mode + "\n")
+  function sendControl(key, value) {
+    if (!ancLive) return false
+    var line = Model.controlCommand(controlBackend, ancState, key, value)
+    if (!line) return false
+    if (classicBridge.running) classicBridge.write(line)
+    else if (ancBridge.running) ancBridge.write(line)
+    else return false
     return true
   }
 
-  // How much of the room comes through in Ambient, 0-20. Sony only — the JBL
-  // protocol has one Ambient Aware and no dial. The bridge switches the headset
-  // to ambient as part of it, because the level is stored only by a set that
-  // carries it: sending a level while Noise Cancelling is on changes nothing.
+  function setAncMode(mode) { return sendControl("noise.mode", String(mode)) }
+
   function setAmbientLevel(value) {
-    if (!classicLive("sony") && !classicLive("soundcore")) return false
-    var level = Math.max(ambientMin, Math.min(ambientMax, Math.round(Number(value))))
+    var level = Number(value)
     if (!isFinite(level)) return false
-    classicBridge.write("level " + level + "\n")
-    return true
+    return sendControl("ambient.level", Math.max(ambientMin, Math.min(ambientMax, Math.round(level))))
   }
 
-  // Focus on Voice (Sony) / Wind Noise Reduction (Soundcore)
-  function setAmbientVoice(on) {
-    if (classicLive("soundcore")) {
-      classicBridge.write("wind " + (on ? "on" : "off") + "\n")
-      return true
-    }
-    if (!classicLive("sony")) return false
-    classicBridge.write("voice " + (on ? "on" : "off") + "\n")
-    return true
-  }
-
-  // How strong the noise cancelling is, on a device that grades it. The device
-  // stores the strength with the mode, so asking for one turns ANC on at it —
-  // the same way Sony's dial switches the headset to Ambient. A strength the
-  // bridge did not list is not a write.
-  function setAncLevel(level) {
-    if (!ancLive || !classicBridge.running) return false
-    if (ancLevels.indexOf(String(level)) === -1) return false
-    classicBridge.write("level " + level + "\n")
-    return true
-  }
-
-  // Low latency on or off, on a device whose bridge has reported the switch.
-  function setLatency(on) {
-    if (!latencyKnown || !classicBridge.running) return false
-    classicBridge.write("latency " + (on ? "on" : "off") + "\n")
-    return true
-  }
+  function setAmbientVoice(on) { return sendControl(ambientToggle, on) }
+  function setAncLevel(level) { return sendControl("anc.strength", String(level)) }
+  function setLatency(on) { return sendControl("audio.low_latency", on) }
 
   // Cycle a helper now rather than after its failure backoff: the reason is a
   // deliberate one (a refresh, a rotated BLE address), and waiting eight seconds
@@ -653,14 +624,14 @@ Item {
   // control at all.
   Process {
     id: ancBridge
-    // `running` goes through jblArmed rather than straight off the conditions:
+    // `running` goes through bleArmed rather than straight off the conditions:
     // `command` and the conditions both depend on bleAddress, and QML does not
     // promise which binding settles first — seen live, the bridge started with
     // an empty address, exited 4 and parked a working model for the session.
     // One turn of the event loop later every binding has caught up.
-    running: follower.jblArmed
-    command: [follower.jblBridgePath].concat(Model.bridgeArgs("jbl",
-      { bleAddress: follower.bleAddress, modelId: follower.modelId }))
+    running: follower.bleArmed
+    command: [follower.bleBridgePath].concat(Model.runnerArgs(follower.controlBackend,
+      { address: follower.address, bleAddress: follower.bleAddress, modelId: follower.modelId, name: follower.reportedName, uuids: follower.deviceUuids }))
     stdinEnabled: true
     stdout: SplitParser {
       onRead: function(line) { follower.applyAncLine(line) }
@@ -688,8 +659,10 @@ Item {
       // something about this machine — a package missing — and once that is
       // installed the row should come back on its own, so it backs off like a
       // dropped link instead, with its message left on screen meanwhile.
-      if (exitCode === 3 && follower.modelId !== "" && follower.service)
-        follower.service.parkModel(follower.modelId)
+      if (exitCode === 3 && follower.service) {
+        if (follower.cacheByModel && follower.modelId !== "") follower.service.parkModel(follower.modelId)
+        else if (!follower.cacheByModel) follower.service.parkAddress(follower.address)
+      }
       // A device that connected and said nothing is not a fault, and the model
       // is parked now, so the row is gone for good rather than pending. Saying
       // so in the panel would be complaining that earbuds lack a feature they
@@ -707,9 +680,9 @@ Item {
       follower.ancRestartWanted = false
       follower.ancEnabled = false
       ancRestart.interval = deliberate ? 600
-        : (follower.service ? follower.service.ancBackoffFor(follower.modelId) : 10000)
+        : (follower.service ? follower.service.ancBackoffFor(follower.ancBackoffKey) : 10000)
       if (!deliberate && (exitCode === 1 || exitCode === 4) && follower.service)
-        follower.service.bumpAncBackoff(follower.modelId)
+        follower.service.bumpAncBackoff(follower.ancBackoffKey)
       ancRestart.restart()
     }
   }
@@ -739,8 +712,8 @@ Item {
     // the reported name, to keep each known model on its own RFCOMM channel.
     command: follower.classicBridgePath === ""
       ? ["true"]
-      : [follower.classicBridgePath].concat(Model.bridgeArgs(follower.controlBackend, {
-          address: follower.address, uuid: follower.sonyUuid, name: follower.reportedName }))
+      : [follower.classicBridgePath].concat(Model.runnerArgs(follower.controlBackend, {
+          address: follower.address, uuid: follower.transportUuid, name: follower.reportedName, uuids: follower.deviceUuids }))
     stdinEnabled: true
     stdout: SplitParser {
       onRead: function(line) { follower.applyAncLine(line) }

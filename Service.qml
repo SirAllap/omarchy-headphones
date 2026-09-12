@@ -171,10 +171,9 @@ Item {
   // the UUID probe settled started as QList("", address). Which file a backend
   // means is a row in BACKENDS in Model.js; "" for a backend no row names.
   function bridgePathFor(backend) {
-    var file = Model.bridgeFor(backend)
+    var file = Model.runnerFor(backend)
     return file === "" ? "" : Qt.resolvedUrl(file).toString().replace(/^file:\/\//, "")
   }
-  readonly property string jblBridgePath: bridgePathFor("jbl")
   // The devices the reader is asked to hold a channel open for. A follower for
   // a device that is not connected is kept so the widget can name what it is
   // waiting for, but it has nothing to open.
@@ -268,7 +267,7 @@ Item {
   // never followed — a JBL pair drawn as headphones off BlueZ's one figure, with
   // no BLE address for its bridge — while a second one arrived by `follow` on
   // stdin and worked. Armed one event-loop turn later instead, the same as
-  // jblArmed and classicArmed in DeviceFollower, so the command has caught up
+  // bleArmed and classicArmed in DeviceFollower, so the command has caught up
   // by the time the process starts.
   readonly property bool readerWanted: root.useFastPair && root.readerAddresses.length > 0
     && root.readerEnabled

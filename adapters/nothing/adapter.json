@@ -1,0 +1,49 @@
+{
+  "apiVersion": 1,
+  "id": "nothing",
+  "priority": 30,
+  "match": {
+    "uuids": [
+      "aeac4a03-dff5-498f-843a-34487cf133eb"
+    ]
+  },
+  "legacy": {
+    "bridge": "nothing-bridge",
+    "args": [
+      "address",
+      "name"
+    ],
+    "controls": {
+      "noise.mode": {
+        "type": "enum",
+        "field": "mode",
+        "choicesField": "available",
+        "choices": [
+          "off",
+          "anc",
+          "ambient",
+          "talkthru"
+        ],
+        "command": "set"
+      },
+      "wear.detected": {
+        "type": "boolean",
+        "field": "worn",
+        "readOnly": true
+      },
+      "anc.strength": {
+        "type": "enum",
+        "field": "ancLevel",
+        "choicesField": "ancLevels",
+        "command": "level"
+      },
+      "audio.low_latency": {
+        "type": "boolean",
+        "field": "latency",
+        "command": "latency"
+      }
+    }
+  },
+  "status": "active",
+  "migration": "legacy process; owner-confirmed transport migration pending"
+}

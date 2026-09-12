@@ -1,0 +1,17 @@
+{
+  "id": "wh-1000xm4",
+  "match": {
+    "name": "WH-1000XM4"
+  },
+  "parameters": {
+    "wear": false
+  },
+  "owners": [
+    "seth-reee"
+  ],
+  "pins": [
+    "tests/pins/sony/wh-1000xm4.json"
+  ],
+  "captures": [],
+  "evidence": "existing"
+}

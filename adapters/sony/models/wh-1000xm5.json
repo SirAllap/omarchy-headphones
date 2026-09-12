@@ -1,0 +1,17 @@
+{
+  "id": "wh-1000xm5",
+  "match": {
+    "name": "WH-1000XM5"
+  },
+  "parameters": {
+    "wear": false
+  },
+  "owners": [
+    "huynguyendinhquang"
+  ],
+  "pins": [
+    "tests/pins/sony/wh-1000xm5.json"
+  ],
+  "captures": [],
+  "evidence": "existing"
+}

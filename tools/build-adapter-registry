@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Generate the plain-JS registry consumed by QML. --check never writes."""
+import argparse
+import json
+from pathlib import Path
+import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from omaphones.registry import ROOT, shell_rows
+from omaphones.scaffold import require_isolated
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--check", action="store_true")
+args = parser.parse_args()
+path = ROOT / "Model.js"
+source = path.read_text()
+begin = "// BEGIN GENERATED ADAPTER REGISTRY\n"
+end = "// END GENERATED ADAPTER REGISTRY\n"
+generated = begin + "var BACKENDS = " + json.dumps(shell_rows(), indent=2) + "\n" + end
+if begin not in source or end not in source:
+    raise SystemExit("Model.js has no generated registry markers")
+start = source.index(begin)
+stop = source.index(end, start) + len(end)
+expected = source[:start] + generated + source[stop:]
+if args.check:
+    if source != expected:
+        raise SystemExit("adapter registry is stale; run tools/build-adapter-registry in an isolated checkout")
+else:
+    require_isolated(ROOT)
+    path.write_text(expected)

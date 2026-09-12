@@ -317,3 +317,12 @@ and booleans), or the widget's entry in `~/.config/omarchy/shell.json`.
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+### Device adapter development
+
+[Adapter API v1](docs/ADAPTER-API.md) separates device protocols from Omaphones'
+transport, lifecycle, state and UI. Sony and JBL have native adapters; other
+bridges retain their existing implementation during migration. Use
+`tools/new-adapter`, `tools/new-model` and `tools/check-adapter` in an isolated
+checkout. New support still needs the owner's captured replies, immutable pins
+and a hardware check of the final revision.
