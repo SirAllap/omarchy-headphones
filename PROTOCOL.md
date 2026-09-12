@@ -1440,6 +1440,125 @@ tools/oppo_probe.py 28:6F:40:D9:A5:A7 20 set:anc
 The widget's bridge holds the same profile, so turn `useModeControl` off
 before running it — a second client is refused while the first is up.
 
+## Bose QC45 — BMAP over RFCOMM
+
+Confirmed on a **Bose QC45** (`AC:BF:71:64:56:B9`, 90% at capture time). Its SDP
+record (from `bluetoothctl info`) carries two vendor UUIDs — the Bose BMAP
+placeholder `00000000-deca-fade-deca-deafdecacaff` and `9b26d8c0-a8ed-440b-95b0-c4714a518bcc` —
+beside SPP and the audio profiles. Neither UUID names the channel BMAP lives
+on, and claiming one through `org.bluez.Profile1` does not reach BMAP at all:
+the deca-fade UUID's own service answers every connection with a repeating
+iAP2-style DETECT prelude (`ff 55 02 00 ee 10` every second) and the
+`9b26d8c0-…` service stayed silent. The bridge ignores the claims and opens a
+**raw RFCOMM socket** on channel **8** (found by probing `sdpconnect`'s table
+and the QC45's own quirk — BMAP rides on the channel its service record never
+states) and asks `[0.1]` until the headset answers.
+
+BMAP frames are `[fblock u8][func u8][flags u8][len u8][payload]`;
+the operator is the low nibble of flags. Init is function 1 of block 0;
+block 2 reports battery and block 31 controls modes. The stored capture
+prints decoded replies after a collection window, so it does not establish
+individual response or switching latency. START's PROCESSING is not mode
+confirmation: the bridge polls for the device's current-mode STATUS.
+
+### Frames
+
+Init — every GET answers only after this, and the answer is the probe:
+
+```
+->  00 01 01 00                [0.1]  GET
+<-  00 01 03 05 31 2e 31 2e 30 [0.1]  STATUS len 5: "1.1.0"
+```
+
+### Listening mode
+
+```
+->  1f 03 01 00                [31.3] GET
+<-  1f 03 03 01 01             [31.3] STATUS: mode index 1
+```
+
+`[31.3]` START sets the index; the readback GET is
+what the bridge reports:
+
+```
+->  1f 03 05 02 00 00 -> 1f 03 07 00   [31.3] START idx 0 -> PROCESSING
+    (on a subsequent readback)
+->  1f 03 01 00                      [31.3] GET
+<-  1f 03 03 01 00                   [31.3] STATUS idx 0
+```
+
+Index 1 (`01`) = Aware, index 0 (`00`) = Quiet. The QC45 has **no Off**; its
+custom slots 2 and 3 come back configured-but-blank from the GET-All burst and
+are never offered. GET-All (`[31.1] START` with empty payload) returned the
+burst that names them — `[31.1]` PROCESSING, `[31.2]` STATUS, `[31.3]` STATUS,
+`[31.5]` STATUS, `[31.6]` PROCESSING plus four 47-byte ModeConfig STATUS frames
+(mode 0 "Quiet", mode 1 "Aware", 2 and 3 blank), `[31.6]` RESULT, `[31.8]`
+STATUS, `[31.1]` RESULT — the bridge does not send it at runtime.
+
+### Battery
+
+```
+->  02 02 01 00                [2.2] GET
+<-  02 02 03 04 5a ff ff 00    [2.2] STATUS: 90%, then nothing for earbuds/case
+```
+
+The level is the first payload byte; the remaining bytes are `ff ff 00`.
+Their meanings, including charging, are not established by this capture. `{"headset": 90, "charging": []}` is the whole battery on
+this device.
+
+### In the widget
+
+[`bose-bridge`](bose-bridge) connects to channels 8, 2, 9 in turn and only
+counts one that answers the `[0.1]` probe, then writes the same lines the other
+bridges do, battery riding on the mode line since the QC45 has no earpieces:
+
+```json
+{"modes": true, "mode": "ambient", "available": ["anc","ambient"],
+ "battery": {"headset": 90, "charging": []}}
+```
+
+Commands on stdin: `set anc|ambient`. Exit codes match the other bridges: 0
+clean, 1 transient, 3 parked (sockets opened but no `[0.1]` answer, or no mode
+answer in ten seconds), 4 setup. `tests/bose_bridge_test.py` pins the probe, the
+two queries, the STARTs and the answers above frame for frame, and
+`tests/pins/bose/qc45.json` replays the decoded replies from the original
+capture plus a synthetic 89% battery-change sample, identified below.
+
+### The capture
+
+[`docs/captures/bose-qc45.txt`](docs/captures/bose-qc45.txt) records decoded
+init, 90% battery, mode GETs, START/PROCESSING/readbacks for indexes 0–3,
+and the GET-All burst. The original session ended with a verified return to
+Aware. RX headers are reconstructed in the pin from decoded fields; the file
+is not a complete raw-byte capture. In the
+[owner confirmation](https://github.com/ncr/omarchy-headphones/pull/13#issuecomment-5648598888),
+@Driskol explicitly identified the pin's `59 ff ff 00` (89%) sample as
+synthetic, derived from the observed 90% reply. It is a battery-change test,
+not an observed device reply; the original pin remains unchanged.
+
+The owner added two recordings in `d663c6d`, made with review revision
+`fc8d7f9`: [`bose-qc45-session.txt`](docs/captures/bose-qc45-session.txt)
+contains complete raw RX chunks and decoded frames for initialization, 100%
+battery, GET-All, mode 0–3 readbacks and verified restoration to initial mode
+1; [`bose-qc45-channels.txt`](docs/captures/bose-qc45-channels.txt) records
+the repeating DETECT prelude and silent Profile1 service described above.
+
+The complete `bluetoothctl info` output mentioned in the owner's comment is
+absent from the supplied files. The two vendor UUIDs have connection traces,
+but the full UUID list in the routing test is not independently corroborated
+by a stored SDP listing. The maintainer explicitly accepted this evidence
+gap for QC45 support in 1.3.2; no missing output was reconstructed.
+
+The updated [`tools/bose_session.py`](tools/bose_session.py) logs raw chunks
+at receipt, retains partial frames and restores the actual initial mode in
+`finally`, verifying readback or reporting failure. Release mode control
+before using it. Channel 8 is observed on this QC45; fallback candidates 2/9
+remain unverified on it. `bose_probe.py` is a diagnostic for the unsuccessful
+Profile1 route, not the recommended QC45 capture tool.
+
+See [the review and owner confirmation](docs/BOSE-REVIEW.md) for the owner's
+test results on `fc8d7f9`, software coverage and remaining evidence limits.
+
 ## Canonical owner captures — 2026-09-08
 
 The maintainer @ncr retested his **Sony WH-CH720N** and **JBL TUNE230NC TWS**.

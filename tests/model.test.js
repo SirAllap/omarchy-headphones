@@ -885,6 +885,32 @@ const DEVICES = [
     bleAddress: "48:B4:41:00:00:01",
   },
   {
+    model: "Bose QC45",
+    backend: "bose",
+    // The real list from `bluetoothctl info AC:BF:71:64:56:B9`. BMAP is
+    // served on a raw RFCOMM channel the record does not name; the two vendor
+    // UUIDs are what claims the device. The deca-fade one's own channel
+    // speaks an iAP2-style DETECT prelude, not BMAP, so the bridge probes.
+    uuids: [
+      "00000000-deca-fade-deca-deafdecacaff",
+      "00001101-0000-1000-8000-00805f9b34fb",
+      "00001108-0000-1000-8000-00805f9b34fb",
+      "0000110a-0000-1000-8000-00805f9b34fb",
+      "0000110b-0000-1000-8000-00805f9b34fb",
+      "0000110c-0000-1000-8000-00805f9b34fb",
+      "0000110d-0000-1000-8000-00805f9b34fb",
+      "0000110e-0000-1000-8000-00805f9b34fb",
+      "0000110f-0000-1000-8000-00805f9b34fb",
+      "0000111e-0000-1000-8000-00805f9b34fb",
+      "0000112e-0000-1000-8000-00805f9b34fb",
+      "00001130-0000-1000-8000-00805f9b34fb",
+      "00001131-0000-1000-8000-00805f9b34fb",
+      "00001200-0000-1000-8000-00805f9b34fb",
+      "9b26d8c0-a8ed-440b-95b0-c4714a518bcc",
+    ],
+    bleAddress: "48:B4:41:00:00:01",
+  },
+  {
     model: "Sony WH-1000XM4",
     backend: "sony",
     uuids: [
