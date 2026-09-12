@@ -21,3 +21,6 @@ jobs:
           deno-version: v2.x
       - run: git fetch --no-tags origin main:refs/remotes/origin/main
       - run: CHECK_BASE=origin/main tools/check
+      - name: Device readiness report
+        if: always()
+        run: tools/add-device check --base origin/main --markdown --summary "$GITHUB_STEP_SUMMARY"

@@ -1,18 +1,12 @@
-"""Author workflow, registry conflicts and new API pins; all data here is synthetic."""
-import contextlib
-import io
+"""Shared runtime validation and cache regressions."""
 import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-
-from omaphones.registry import ROOT, descriptors, get_adapter, load_protocol, model_parameters, transport_for
-from omaphones.scaffold import new_adapter, new_model
-from omaphones.checking import check_boundary, suite_for
-from omaphones.testing import Replay
-from omaphones.api import Protocol, Event
 from omaphones import cache
+from omaphones.api import Protocol
+from omaphones.testing import Replay
 from omaphones.runner import main, parse_command
 
 
@@ -21,101 +15,6 @@ class Tools(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        (self.root / 'adapters').mkdir()
-        with contextlib.redirect_stdout(io.StringIO()):
-            new_adapter(['example', '--uuid', '10000000-0000-0000-0000-000000000001', '--priority', '70'], self.root)
-        self.package = self.root / 'adapters/example'
-
-    def save(self, relative, value):
-        (self.package / relative).write_text(json.dumps(value))
-
-    def test_author_tools_refuse_the_live_plugin_directory(self):
-        with patch('omaphones.scaffold.installed_root', return_value=self.root):
-            with self.assertRaisesRegex(ValueError, 'isolated clone'):
-                new_adapter(['another', '--uuid', '10000000-0000-0000-0000-000000000002', '--priority', '80'], self.root)
-        self.assertFalse((self.root/'adapters/another').exists())
-
-    def test_generated_draft_is_inert_and_overwrite_is_refused(self):
-        self.assertEqual(descriptors(self.root), [])
-        self.assertEqual(len(descriptors(self.root, drafts=True)), 1)
-        with self.assertRaises(FileExistsError), contextlib.redirect_stdout(io.StringIO()):
-            new_adapter(['example', '--uuid', '10000000-0000-0000-0000-000000000001', '--priority', '70'], self.root)
-        result = unittest.TestResult()
-        suite_for('example', self.root, include_drafts=True).run(result)
-        self.assertEqual(len(result.failures), 1)
-
-    def test_draft_model_does_not_change_effective_parameters(self):
-        with contextlib.redirect_stdout(io.StringIO()):
-            new_model(['example', 'headset', '--name', 'Headset', '--owner', 'test-owner'], self.root)
-        row = descriptors(self.root, drafts=True)[0]
-        self.assertEqual(model_parameters(row, {'name': 'Headset'}, self.root), {})
-        model = json.loads((self.package / 'models/headset.json').read_text())
-        model['status'] = 'active'
-        self.save('models/headset.json', model)
-        row['status'] = 'active'; self.save('adapter.json', row)
-        with self.assertRaisesRegex(ValueError, 'owner, pin and capture'):
-            descriptors(self.root)
-
-    def test_overlapping_uuid_claims_and_wrong_api_are_rejected(self):
-        row = descriptors(self.root, drafts=True)[0]
-        row['status'] = 'active'; self.save('adapter.json', row)
-        peer = self.root / 'adapters/peer'; peer.mkdir()
-        (peer/'protocol.py').write_text((self.package/'protocol.py').read_text())
-        (peer/'adapter.json').write_text(json.dumps({**row, 'id': 'peer', 'priority': 80}))
-        with self.assertRaisesRegex(ValueError, 'overlapping'):
-            descriptors(self.root)
-        row['apiVersion'] = 2; self.save('adapter.json', row)
-        with self.assertRaisesRegex(ValueError, 'API version'):
-            descriptors(self.root)
-
-    def test_model_channel_override_cannot_change_peer_or_unknown_transport(self):
-        row = json.loads((self.package/'adapter.json').read_text())
-        row['transport'] = {'kind': 'rfcomm', 'channels': [15, 28]}
-        row['modelTransportFields'] = ['channels']
-        self.save('adapter.json', row)
-        for name, channel in (('old', 15), ('new', 28)):
-            self.save('models/' + name + '.json', {'id': name, 'match': {'name': name}, 'parameters': {}, 'transport': {'channels': [channel]}})
-        descriptors(self.root, drafts=True)
-        self.assertEqual(transport_for(row, {'name': 'old'}, self.root)['channels'], [15])
-        self.assertEqual(transport_for(row, {'name': 'new'}, self.root)['channels'], [28])
-        self.assertEqual(transport_for(row, {'name': 'unseen'}, self.root)['channels'], [15, 28])
-        bad = json.loads((self.package/'models/new.json').read_text())
-        bad['transport'] = {'channels': [31]}; self.save('models/new.json', bad)
-        with self.assertRaisesRegex(ValueError, '1-30'):
-            descriptors(self.root, drafts=True)
-        bad['transport'] = {'kind': 'ble-gatt'}; self.save('models/new.json', bad)
-        with self.assertRaisesRegex(ValueError, 'undeclared transport'):
-            descriptors(self.root, drafts=True)
-
-    def test_boundary_refuses_platform_imports_and_file_access(self):
-        for source in ('import socket', 'from os import read', 'open("state.json")', '__import__("os")'):
-            (self.package/'protocol.py').write_text(source)
-            with self.assertRaises(ValueError):
-                check_boundary(self.package/'protocol.py')
-
-    def test_new_package_can_run_its_pin_without_changing_host_code(self):
-        # Synthetic protocol for testing the SDK, never hardware evidence.
-        (self.package/'protocol.py').write_text('''from omaphones.api import Protocol
-class Adapter(Protocol):
-    def connected(self):
-        self.write(b"query")
-    def received(self, data):
-        if data == b"off":
-            self.report({"noise.mode": "off"}, {"noise.mode": {"values": ["off", "anc"]}})
-    def command(self, control, value):
-        self.write(value.encode())
-''')
-        (self.package/'tests/protocol_test.py').write_text('import unittest\n')
-        (self.package/'captures/synthetic.txt').write_text('synthetic test input, not a device recording')
-        prefix = 'adapters/example/'
-        self.save('pins/headset.json', {'apiVersion': 1, 'adapter': 'example', 'model': 'Headset', 'owner': 'test-owner', 'capture': prefix+'captures/synthetic.txt', 'context': {'name': 'Headset'}, 'steps': [
-            {'event': 'connected'}, {'sent': ['71 75 65 72 79']}, {'device': '6f 66 66'}, {'values': {'noise.mode': 'off'}},
-            {'command': {'control': 'noise.mode', 'value': 'anc'}}, {'sent': ['71 75 65 72 79', '61 6e 63']}, {'values': {'noise.mode': 'off'}}]})
-        self.save('models/headset.json', {'id': 'headset', 'match': {'name': 'Headset'}, 'parameters': {}, 'owners': ['test-owner'], 'captures': [prefix+'captures/synthetic.txt'], 'pins': [prefix+'pins/headset.json']})
-        row = json.loads((self.package/'adapter.json').read_text()); row['status'] = 'active'; self.save('adapter.json', row)
-        result = unittest.TestResult(); suite_for('example', self.root).run(result)
-        self.assertEqual(result.errors, []); self.assertEqual(result.failures, [])
-        self.assertEqual(result.testsRun, 1)
 
     def test_command_validation_and_bad_identity_do_not_touch_bluetooth(self):
         for line in ('[]', '{}', '{"apiVersion": 2,"control":"noise.mode","value":"anc"}', 'set unknown', 'voice maybe'):

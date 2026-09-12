@@ -486,7 +486,7 @@ var BACKENDS = [
       "uuid",
       "name"
     ],
-    "runtime": true,
+    "runtime": false,
     "controls": {
       "noise.mode": {
         "type": "enum",
@@ -521,15 +521,15 @@ var BACKENDS = [
     },
     "needsBleAddress": false,
     "supportCache": "",
+    "uuidPreference": [
+      "956c7b26-d49a-4ba8-b03f-b17d393cb6e2",
+      "96cc203e-5068-46ad-b32d-e316f5e069ba"
+    ],
     "ambient": {
       "min": 0,
       "max": 20,
       "voice": "Focus on voice"
-    },
-    "uuidPreference": [
-      "956c7b26-d49a-4ba8-b03f-b17d393cb6e2",
-      "96cc203e-5068-46ad-b32d-e316f5e069ba"
-    ]
+    }
   },
   {
     "name": "samsung",
@@ -690,12 +690,12 @@ var BACKENDS = [
     },
     "needsBleAddress": false,
     "supportCache": "",
+    "uuidPreference": [],
     "ambient": {
       "min": 1,
       "max": 5,
       "voice": "Wind noise reduction"
-    },
-    "uuidPreference": []
+    }
   },
   {
     "name": "oppo",
@@ -755,11 +755,6 @@ var BACKENDS = [
           "talkthru"
         ],
         "command": "set"
-      },
-      "wear.detected": {
-        "type": "boolean",
-        "field": "worn",
-        "readOnly": true
       }
     },
     "needsBleAddress": false,
@@ -777,7 +772,7 @@ var BACKENDS = [
       "bleAddress",
       "modelId"
     ],
-    "runtime": true,
+    "runtime": false,
     "controls": {
       "noise.mode": {
         "type": "enum",
@@ -820,12 +815,20 @@ function rowClaims(row, id) {
 // The backend to run for this device — a row's name — or "" for a device no
 // path can reach. SDP UUIDs win because they come from the device's own
 // record; a known BLE address only says the Message Stream is up.
-function controlBackend(uuids, bleAddress) {
+function controlBackend(uuids, bleAddress, name, modelId) {
   var list = uuids || []
   var ids = []
   for (var i = 0; i < list.length; i++) ids.push(str(list[i]).trim().toLowerCase())
   for (var r = 0; r < BACKENDS.length; r++) {
     var row = BACKENDS[r]
+    if (row.deviceMatch) {
+      var match = row.deviceMatch
+      var exactName = match.names.some(function (n) { return n.toLowerCase() === str(name).trim().toLowerCase() })
+      var exactIds = match.uuids.every(function (id) { return ids.indexOf(id) !== -1 })
+      if (exactName && exactIds && (!match.modelId || match.modelId === str(modelId).toLowerCase())
+          && (!row.needsBleAddress || str(bleAddress).trim() !== "")) return row.name
+      continue
+    }
     if (row.ble) {
       if (str(bleAddress).trim() !== "") return row.name
       continue
@@ -977,6 +980,7 @@ function transportUuidFor(backend, uuids) {
 function runnerArgs(backend, context) {
   var row = backendRow(backend)
   if (!row) return []
+  if (row.profile) return ["--device", row.profile, "--context", JSON.stringify(context || {})]
   return row.runtime ? [backend, "--context", JSON.stringify(context || {})] : bridgeArgs(backend, context)
 }
 

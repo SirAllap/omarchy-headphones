@@ -49,5 +49,38 @@
     }
   },
   "status": "active",
-  "migration": "legacy process; owner-confirmed transport migration pending"
+  "entry": "protocol.py",
+  "modelTransportFields": [
+    "uuidPreference"
+  ],
+  "parameterSchema": {
+    "offset": {
+      "type": "integer",
+      "required": true,
+      "min": 0,
+      "max": 4096
+    },
+    "query": {
+      "type": "boolean",
+      "required": true
+    }
+  },
+  "unknownModel": {
+    "offset": 71,
+    "query": true
+  },
+  "namelessModel": {
+    "offset": 71,
+    "query": true
+  },
+  "transport": {
+    "kind": "bluez-profile",
+    "uuidPreference": [
+      "0cf12d31-fac3-4553-bd80-d6832e700000"
+    ],
+    "connectAttempts": 10,
+    "connectRetry": 1500,
+    "connectDelay": 500,
+    "connectTimeout": 30
+  }
 }

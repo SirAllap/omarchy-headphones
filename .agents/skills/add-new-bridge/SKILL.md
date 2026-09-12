@@ -10,7 +10,7 @@ headphones. Start with the owner's device and observed replies, then make
 implementation, tests, documentation and the hardware report agree.
 
 Read `AGENTS.md`, `BRIDGE.md`, `docs/CANONICAL-TESTS.md` and the relevant
-`PROTOCOL.md` section from the repository root. They define the contract and
+`PROTOCOL.md` section and `docs/ADAPTER-API.md` from the repository root. They define the contract and
 required coverage; use this workflow to produce it, not a second rulebook.
 
 ## Choose the smallest integration
@@ -19,8 +19,13 @@ Record the reported name, firmware when available, address and complete
 `bluetoothctl info` UUID list. Inspect the existing backend selection and
 try the supported interface first. Working battery/control may need only a
 new owner capture, pin, model documentation and gallery entry. Extend an
-existing brand bridge by a model row when its protocol fits. Create a new
-bridge only for a distinct protocol or transport that requires one.
+existing shared codec through `tools/add-device init --adapter <brand>` when
+its protocol fits. For a new model, keep identity, parameters, capture, replay,
+fault tests and owner reports in one `devices/<id>/` package. If no shared codec
+fits, implement local `protocol.py` against the same Protocol API. Transport,
+clocks, capture and state belong to the host; do not create separate live and
+replay implementations. Existing supported models keep their legacy workflows
+and owner pins until a separately validated migration.
 
 Work in an isolated clone outside the installed plugin, including Git
 metadata and generated outputs. Resolve symlinks before writing. Do not
@@ -76,9 +81,12 @@ workflows; preserve the actual supported-headphone contract.
 
 ## Test real paths and evidence
 
-Add a Session on `tests/harness.py` and the model's own pin naming its owner
-and capture. Cover exact outgoing startup and control sequences and actual
-incoming replies. Reuse captured RX bytes, not the production encoder's
+For a new device package, use `tools/add-device capture`, `live`, `session`
+and `check`; review the generated expectations and complete the model fault
+scenarios. Session replay and live operation must use the same shared host.
+For an existing legacy model, retain its Session on `tests/harness.py` and its
+own immutable pin. Cover exact outgoing startup and control sequences and
+actual incoming replies. Reuse captured RX bytes, not the production encoder's
 reconstruction as independent evidence. Keep existing pins/captures intact.
 
 Follow the applicable canonical scenarios. In particular:

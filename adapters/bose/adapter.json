@@ -25,14 +25,23 @@
           "talkthru"
         ],
         "command": "set"
-      },
-      "wear.detected": {
-        "type": "boolean",
-        "field": "worn",
-        "readOnly": true
       }
     }
   },
   "status": "active",
-  "migration": "legacy process; owner-confirmed transport migration pending"
+  "entry": "protocol.py",
+  "modelTransportFields": [
+    "channels"
+  ],
+  "transport": {
+    "kind": "rfcomm",
+    "channels": [
+      8,
+      2,
+      9
+    ],
+    "connectTimeout": 10000,
+    "connectAttempts": 10,
+    "connectRetry": 1500
+  }
 }

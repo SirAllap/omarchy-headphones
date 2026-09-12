@@ -1,11 +1,11 @@
 # The bridge contract
 
-Native adapter development uses [API v1](docs/ADAPTER-API.md). Sony and JBL are
-launched through `omaphones-device`; the host projects their named capabilities
-into the JSON fields below for existing shell/IPC consumers. Their original
-bridge executables remain regression references. The other five bridges still
-use this process contract directly. Adapter selection and compatibility metadata
-now live in `adapters/*/adapter.json`; `BACKENDS` is generated from those files.
+New model development uses [API v1](docs/ADAPTER-API.md): one package under
+`devices/` and a pure protocol running in `omaphones-device`. The host projects
+named capabilities into the JSON fields below for existing shell/IPC consumers.
+All eight existing bridges still launch for their supported models. Their owner
+pins and raw evidence remain unchanged. `tools/add-device sync` generates
+`BACKENDS` from device packages and legacy metadata in `adapters/*/adapter.json`.
 
 A bridge is one process that holds one link to one device and mirrors its
 listening mode. Eight exist — `jbl-bridge`, `sony-bridge`, `samsung-bridge`,

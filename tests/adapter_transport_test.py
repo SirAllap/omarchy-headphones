@@ -20,6 +20,7 @@ class TransportTests(unittest.TestCase):
         events = []; transport.deliver = events.append
         transport.opened(rx)
         calls = []
+        captured = []; transport.record = lambda direction, data: captured.append((direction, data))
         def write(fd, data):
             calls.append(bytes(data))
             if len(calls) == 1:
@@ -35,6 +36,7 @@ class TransportTests(unittest.TestCase):
             glib.watchers[writer][2](rx, glib.IO_OUT)
             self.assertEqual(transport.pending, bytearray())
         self.assertEqual(calls, [b'abcdef', b'cdef', b'cdef'])
+        self.assertEqual(captured, [('tx', b'ab'), ('tx', b'cdef')])
         os.write(tx, b'last frame')
         transport.readable(rx, glib.IO_IN | glib.IO_HUP)
         self.assertEqual([e.kind for e in events], ['connected', 'received', 'disconnected'])
@@ -169,5 +171,35 @@ class TransportTests(unittest.TestCase):
             clock.advance(100)
         self.assertTrue(sockets[1].closed)
         self.assertEqual(len(endpoints), 2)
+        self.assertEqual(glib.watchers, {})
+        self.assertEqual(clock.pending, {})
+
+    def test_rejected_rfcomm_endpoint_closes_fd_then_tries_next_channel(self):
+        clock = Clock(); glib = GattGLib(clock)
+        endpoints, sockets, peers, captured = [], [], [], []
+        class Socket:
+            def __init__(self):
+                self.fd, peer = os.pipe(); peers.append(peer); self.closed = False
+            def setblocking(self, flag): pass
+            def connect_ex(self, endpoint): endpoints.append(endpoint); return 0
+            def detach(self):
+                fd, self.fd = self.fd, None
+                return fd
+            def close(self):
+                self.closed = True
+                if self.fd is not None: os.close(self.fd); self.fd = None
+        def factory(*args):
+            sock = Socket(); sockets.append(sock); return sock
+        transport = RfcommTransport({'channels': [8, 2]}, {'address': 'AA:BB:CC:DD:EE:FF'}, glib)
+        transport.deliver = captured.append
+        with patch('omaphones.transports.socket.socket', side_effect=factory):
+            transport.start(); old_fd = transport.fd
+            transport.next_endpoint()
+            self.assertEqual([address[1] for address in endpoints], [8, 2])
+            self.assertTrue(sockets[0].closed)
+            self.assertEqual([e.kind for e in captured], ['connected', 'connected'])
+            self.assertEqual(len(glib.watchers), 1)
+            transport.close()
+        for fd in peers: os.close(fd)
         self.assertEqual(glib.watchers, {})
         self.assertEqual(clock.pending, {})

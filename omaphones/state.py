@@ -10,6 +10,11 @@ CONTROLS = set(ENUMS) | BOOLEANS | {"ambient.level", "battery"}
 def validate_capability(key, spec):
     if key not in CONTROLS or not isinstance(spec, dict):
         raise ValueError("unknown capability: " + key)
+    if 'readOnly' in spec and type(spec['readOnly']) is not bool:
+        raise ValueError('readOnly must be boolean')
+    expected_type = 'enum' if key in ENUMS else 'number' if key == 'ambient.level' else None
+    if expected_type and 'type' in spec and spec['type'] != expected_type:
+        raise ValueError('invalid capability type: ' + key)
     if key in ENUMS:
         values = spec.get("values")
         if not isinstance(values, list) or not values or any(v not in ENUMS[key] for v in values) or len(values) != len(set(values)):
@@ -47,11 +52,37 @@ def valid_value(key, value, spec):
 
 
 class State:
-    def __init__(self):
+    def __init__(self, limits=None):
         self.values = {}
         self.capabilities = {}
+        self.limits = deepcopy(limits)
 
     def apply(self, report):
+        if self.limits is not None:
+            from omaphones.api import Report
+            limited = {}
+            for key, spec in report.capabilities.items():
+                validate_capability(key, spec)
+                if key not in self.limits:
+                    continue
+                approved = deepcopy(self.limits[key])
+                if key in ENUMS:
+                    approved['values'] = [v for v in approved['values'] if v in spec['values']]
+                    if not approved['values']:
+                        continue
+                elif key == 'ambient.level':
+                    if approved['min'] < spec['min'] or approved['max'] > spec['max'] or approved['step'] % spec['step'] or (approved['min'] - spec['min']) % spec['step']:
+                        raise ValueError('declared range exceeds device report')
+                if spec.get('readOnly'):
+                    approved['readOnly'] = True
+                limited[key] = approved
+            values = {k: deepcopy(v) for k, v in report.values.items() if k in self.limits and (k in limited or k in self.capabilities)}
+            if 'battery' in values:
+                parts = self.limits['battery'].get('parts', [])
+                values['battery'] = {k: v for k, v in values['battery'].items() if k in parts or k in ('charging', 'caseStale')}
+                if 'charging' in values['battery']:
+                    values['battery']['charging'] = [p for p in values['battery']['charging'] if p in parts]
+            report = Report(values, limited)
         caps = deepcopy(self.capabilities)
         for key, spec in report.capabilities.items():
             validate_capability(key, spec)

@@ -33,5 +33,18 @@
     }
   },
   "status": "active",
-  "migration": "legacy process; owner-confirmed transport migration pending"
+  "entry": "protocol.py",
+  "modelTransportFields": [
+    "uuidPreference"
+  ],
+  "transport": {
+    "kind": "bluez-profile",
+    "uuidPreference": [
+      "00001101-0000-1000-8000-00805f9b34fb"
+    ],
+    "connectAttempts": 10,
+    "connectRetry": 1500,
+    "connectDelay": 500,
+    "connectTimeout": 30
+  }
 }

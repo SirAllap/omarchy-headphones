@@ -1,16 +1,17 @@
 """Execute effects with injected transport, clock and output; also used in replay."""
-from omaphones.api import Event, Send, Schedule, Report, Finish, CancelTimer
+from omaphones.api import Event, Send, Schedule, Report, Finish, CancelTimer, NextEndpoint
 from omaphones.state import State
 
 
 class Session:
-    def __init__(self, adapter, transport, clock, output, ended=lambda code, message: None):
+    def __init__(self, adapter, transport, clock, output, ended=lambda code, message: None, limits=None, recorder=None):
         self.adapter = adapter
         self.transport = transport
         self.clock = clock
         self.output = output
         self.ended = ended
-        self.state = State()
+        self.state = State(limits)
+        self.recorder = recorder
         self.exit_code = None
         self.message = ""
         self.timers = {}
@@ -18,17 +19,21 @@ class Session:
     def dispatch(self, event):
         if self.exit_code is not None:
             return
-        if event.kind == "command" and not self.state.accepts(event.control, event.value):
-            return
         if event.kind == "timer":
             self.timers.pop(event.value, None)
         try:
+            if self.recorder:
+                self.recorder.event(event)
+            if event.kind == "command" and not self.state.accepts(event.control, event.value):
+                return
             effects = self.adapter.on_event(event)
             for effect in effects:
                 if self.exit_code is not None:
                     break
                 if isinstance(effect, Send):
                     self.transport.write(effect.data)
+                elif isinstance(effect, NextEndpoint):
+                    self.transport.next_endpoint()
                 elif isinstance(effect, Schedule):
                     if type(effect.milliseconds) is not int or effect.milliseconds < 0:
                         raise ValueError("invalid adapter timer")
@@ -39,7 +44,11 @@ class Session:
                     if scheduled is not None:
                         self.clock.cancel(scheduled)
                 elif isinstance(effect, Report):
+                    if event.kind == 'command':
+                        raise ValueError('a command cannot report device state before RX')
                     if self.state.apply(effect):
+                        if self.recorder:
+                            self.recorder.record('state', self.state.snapshot())
                         self.output(self.state)
                 elif isinstance(effect, Finish):
                     self.finish(effect.code, effect.message)

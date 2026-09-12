@@ -80,5 +80,42 @@
       "type": "boolean",
       "required": true
     }
-  }
+  },
+  "referenceModels": {
+    "WH-1000XM4": {
+      "match": {
+        "name": "WH-1000XM4"
+      },
+      "parameters": {
+        "wear": false
+      }
+    },
+    "WH-1000XM5": {
+      "match": {
+        "name": "WH-1000XM5"
+      },
+      "parameters": {
+        "wear": false
+      }
+    },
+    "WH-1000XM6": {
+      "match": {
+        "name": "WH-1000XM6"
+      },
+      "parameters": {
+        "wear": true
+      }
+    },
+    "WH-CH720N": {
+      "match": {
+        "name": "WH-CH720N"
+      },
+      "parameters": {
+        "wear": false
+      }
+    }
+  },
+  "modelTransportFields": [
+    "uuidPreference"
+  ]
 }

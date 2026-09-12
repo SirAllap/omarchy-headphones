@@ -37,12 +37,13 @@ class Clock:
 
 class Replay:
     """Drive the same Session as the live runner; all effects are inspectable."""
-    def __init__(self, adapter):
+    def __init__(self, adapter, limits=None):
         self.clock = Clock()
         self.sent = []
         self.reports = []
         self.closed = False
-        self.session = Session(adapter, self, self.clock, lambda state: self.reports.append(state.snapshot()))
+        self.endpoint_changes = 0
+        self.session = Session(adapter, self, self.clock, lambda state: self.reports.append(state.snapshot()), limits=limits)
 
     def write(self, data):
         if self.closed:
@@ -51,6 +52,9 @@ class Replay:
 
     def close(self):
         self.closed = True
+
+    def next_endpoint(self):
+        self.endpoint_changes += 1
 
     def event(self, kind, value=None, control=""):
         self.session.dispatch(Event(kind, value, control))
@@ -63,6 +67,14 @@ class Replay:
 
     def advance(self, milliseconds):
         self.clock.advance(milliseconds)
+
+    def fire(self, token):
+        scheduled = self.session.timers.get(token)
+        if scheduled not in self.clock.pending:
+            raise ValueError('capture names an unscheduled timer')
+        at, callback = self.clock.pending.pop(scheduled)
+        self.clock.now = max(self.clock.now, at)
+        callback()
 
     def play(self, test, pin):
         for index, step in enumerate(pin["steps"]):

@@ -1,63 +1,63 @@
-"""Author tools create inert drafts; evidence and protocol bytes come from owners."""
-import argparse
+"""Create inert device drafts; never invent protocol parameters or evidence."""
 import json
+import os
 from pathlib import Path
 
-from omaphones.registry import ROOT, ID, UUID, contained, read_json
+from omaphones.registry import ROOT, ID, get_adapter
+from omaphones import devices
 
 
 def installed_root():
-    import os
-    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    return (config / "omarchy/plugins/io.github.ncr.omaphones").resolve()
+    return (Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config') / 'omarchy/plugins/io.github.ncr.omaphones').resolve()
 
 
 def require_isolated(root):
-    if root.resolve() == installed_root():
-        raise ValueError("work in an isolated clone; writing here reloads the active plugin")
+    if root.resolve().is_relative_to(installed_root()):
+        raise ValueError('work in an isolated clone; writing here reloads the active plugin')
 
 
 def save(path, value):
-    with path.open("x") as handle:
+    with path.open('x') as handle:
         json.dump(value, handle, indent=2)
-        handle.write("\n")
+        handle.write('\n')
 
 
-def new_adapter(argv=None, root=ROOT):
-    parser = argparse.ArgumentParser(description="Create a draft adapter package")
-    parser.add_argument("id")
-    parser.add_argument("--uuid", required=True, help="observed identifying service UUID")
-    parser.add_argument("--transport", choices=("bluez-profile", "rfcomm", "ble-gatt"), default="bluez-profile")
-    parser.add_argument("--channel", type=int, action="append")
-    parser.add_argument("--write-handle")
-    parser.add_argument("--notify-handle")
-    parser.add_argument("--priority", type=int, required=True)
-    args = parser.parse_args(argv)
-    if not ID.fullmatch(args.id) or not UUID.fullmatch(args.uuid):
-        parser.error("use a lowercase adapter id and observed UUID")
-    transport = {"kind": args.transport}
-    if args.transport == "bluez-profile":
-        transport["uuidPreference"] = [args.uuid]
-    elif args.transport == "rfcomm":
-        if not args.channel or any(not 1 <= c <= 30 for c in args.channel):
-            parser.error("RFCOMM requires observed --channel values (1-30)")
-        transport["channels"] = args.channel
-    else:
-        import re
-        if any(not re.fullmatch(r"0x[0-9a-f]{4}", value or "") for value in (args.write_handle, args.notify_handle)):
-            parser.error("GATT requires observed --write-handle and --notify-handle")
-        transport.update(writeHandle=args.write_handle, notifyHandle=args.notify_handle, addressField="bleAddress")
+def initialize(slug, owner, text, adapter_id=None, parameters=None, model_id=None, root=ROOT):
     require_isolated(root)
-    package = root / "adapters" / args.id
-    package.mkdir()  # Refuse to overwrite an existing package.
-    for name in ("models", "pins", "captures", "tests"):
-        (package / name).mkdir()
-    save(package / "adapter.json", {
-        "apiVersion": 1, "id": args.id, "status": "draft", "priority": args.priority,
-        "match": {"uuids": [args.uuid]}, "entry": "protocol.py", "transport": transport,
-        "modelTransportFields": {"bluez-profile": ["uuidPreference"], "rfcomm": ["channels"], "ble-gatt": ["writeHandle", "notifyHandle"]}[args.transport],
-    })
-    (package / "protocol.py").write_text('''"""Fill only from this device's observed protocol; see docs/ADAPTER-API.md."""
+    if not ID.fullmatch(slug):
+        raise ValueError('invalid device id')
+    record = devices.identity(text)
+    definition = {'module': 'protocol.py', 'parameters': {}, 'transport': {'kind': 'bluez-profile', 'uuidPreference': []}}
+    if adapter_id:
+        row = get_adapter(adapter_id, root)
+        if not row or not row.get('entry'):
+            raise ValueError('unknown shared protocol')
+        definition = {'id': adapter_id, 'parameters': {key: None for key, spec in row.get('parameterSchema', {}).items() if spec.get('required')}}
+        # Never presume another model's channel or profile UUID.
+        if row['transport']['kind'] == 'rfcomm':
+            definition['transport'] = {'channels': []}
+        elif row['transport']['kind'] == 'bluez-profile':
+            definition['transport'] = {'uuidPreference': []}
+    if parameters is not None:
+        definition['parameters'] = parameters
+    profile = {'apiVersion': 1, 'id': slug, 'model': record['name'], 'owner': owner,
+               'status': 'draft', 'match': {'names': [record['name']], 'uuids': record['uuids']},
+               'adapter': definition, 'capabilities': {'noise.mode': {'type': 'enum', 'values': []}}}
+    if model_id:
+        profile['match']['modelId'] = model_id
+    directory = root / 'devices' / slug
+    directory.parent.mkdir(exist_ok=True)
+    directory.mkdir()
+    save(directory / 'device.json', profile)
+    (directory / 'identity.txt').write_text(text)
+    (directory / 'protocol.md').write_text('# ' + record['name'] + '\n\nDescribe observed requests, replies, transport, firmware and untested behavior.\n')
+    save(directory / 'owner-checks.json', {'owner': owner, 'implementation': '', 'checks': {
+        key: {'status': 'untested', 'evidence': ''} for key in ('shell-integration', 'reconnect', 'peer-isolation', 'charging', 'acoustics')}})
+    from omaphones.contribution import FAULTS
+    (directory / 'test_adapter.py').write_text('"""Synthetic damage must remain separate from observed evidence."""\nimport unittest\n\n\nclass Faults(unittest.TestCase):\n' + ''.join(
+        '    def test_' + name + '(self):\n        self.fail("Add this model\'s ' + name + ' scenario")\n\n' for name in FAULTS))
+    if not adapter_id:
+        (directory / 'protocol.py').write_text('''"""Only observed protocol bytes. All I/O belongs to the shared host."""
 from omaphones.api import Protocol
 
 
@@ -71,45 +71,4 @@ class Adapter(Protocol):
     def command(self, control, value):
         pass
 ''')
-    (package / "tests" / "protocol_test.py").write_text('''"""Add captured exchanges and synthetic fault cases before activating."""
-import unittest
-
-
-class EvidenceRequired(unittest.TestCase):
-    def test_owner_evidence_required(self):
-        self.fail("Replace this draft with captured protocol and failure-path tests")
-''')
-    print(package)
-
-
-def new_model(argv=None, root=ROOT):
-    parser = argparse.ArgumentParser(description="Create a draft model without changing another model")
-    parser.add_argument("adapter")
-    parser.add_argument("id")
-    identity = parser.add_mutually_exclusive_group(required=True)
-    identity.add_argument("--name")
-    identity.add_argument("--model-id")
-    identity.add_argument("--uuid-suffix")
-    parser.add_argument("--owner", required=True)
-    parser.add_argument("--parameters", default="{}", help="JSON protocol variant parameters")
-    parser.add_argument("--transport", default="{}", help="JSON observed model transport overrides")
-    args = parser.parse_args(argv)
-    if not ID.fullmatch(args.adapter) or not ID.fullmatch(args.id):
-        parser.error("invalid adapter or model id")
-    require_isolated(root)
-    package = root / "adapters" / args.adapter
-    row = read_json(package / "adapter.json")
-    if not row.get("entry"):
-        parser.error("this adapter still uses its legacy model table; migrate it first")
-    parameters = json.loads(args.parameters)
-    if not isinstance(parameters, dict):
-        parser.error("parameters must be an object")
-    overrides = json.loads(args.transport)
-    if not isinstance(overrides, dict) or set(overrides) - set(row.get("modelTransportFields", [])):
-        parser.error("undeclared model transport override")
-    match = {"name": args.name} if args.name else {"modelId": args.model_id} if args.model_id else {"uuidSuffix": args.uuid_suffix}
-    (package / "models").mkdir(exist_ok=True)
-    path = package / "models" / (args.id + ".json")
-    save(path, {"id": args.id, "status": "draft", "match": match, "parameters": parameters,
-                "owners": [args.owner], "pins": [], "captures": [], "transport": overrides})
-    print(path)
+    return directory

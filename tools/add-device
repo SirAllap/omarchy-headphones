@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Add your headphones as one device package. Run without arguments for the guide."""
+import argparse
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from omaphones import contribution, live, devices as profiles, evidence as replay
+from omaphones.registry import ID, contained, descriptors
+from omaphones.scaffold import require_isolated, initialize as create_draft
+
+
+def isolated():
+    require_isolated(profiles.ROOT)
+
+
+def package(slug):
+    if not ID.fullmatch(slug):
+        raise ValueError("invalid device id")
+    return contained(profiles.ROOT / "devices", slug)
+
+
+def json_file(path, value):
+    with path.open("x") as output:
+        output.write(json.dumps(value, indent=2) + "\n")
+
+
+def info(address):
+    if not profiles.ADDRESS.fullmatch(address):
+        raise ValueError("invalid Bluetooth address")
+    return subprocess.check_output(["bluetoothctl", "info", address], text=True, timeout=15)
+
+
+def initialize(args):
+    text = args.info.read_text() if args.info else info(args.address)
+    directory = create_draft(args.id, args.owner, text, args.adapter,
+                             json.loads(args.parameters) if args.parameters else None, args.model_id)
+    print(directory)
+    print("Draft is inert. Fill observed transport, parameters and capabilities; see docs/ADAPTER-API.md.")
+
+
+def command_for(profile, args, capture):
+    record = profiles.identity(info(args.address))
+    model_id = args.model_id or profile["match"].get("modelId", "")
+    record.update(modelId=model_id, bleAddress=args.ble_address or "")
+    if not profiles.matches(profile, record):
+        raise ValueError("connected device does not match this package")
+    definition = profiles.resolve(profile, package(profile['id']))
+    if definition['transport']['kind'] == 'ble-gatt' and not args.ble_address:
+        raise ValueError("supply the BLE address announced by this device's Fast Pair stream")
+    return [sys.executable, str(profiles.ROOT / "omaphones-device"), "--device", profile['id'],
+            "--allow-draft", "--context", json.dumps(record), "--capture", str(capture)]
+
+
+def scaffold_session(directory):
+    profile = profiles.load(directory)
+    events = replay.capture(directory / "capture.jsonl", profile)
+    steps, sent, state_ids = [], [], []
+    def assertions():
+        # Captured socket writes may flush after the input that queued them.
+        if state_ids:
+            steps.append({'expect': None, 'note': 'Independently review final state event ' + state_ids[-1] + '; fill expectation and case.'})
+            state_ids.clear()
+    for event in events.values():
+        direction = event['direction']
+        if direction in replay.INPUTS:
+            if steps:
+                assertions()
+            steps.append({'feed': event['id']})
+        elif direction == 'tx':
+            sent.append(event['id'])
+        elif direction == 'state':
+            state_ids.append(event['id'])
+    assertions()
+    steps.append({'sent': sent})
+    json_file(directory / 'session.json', {'apiVersion': 1, 'steps': steps})
+    print('Created unapproved expectations. Required cases:', ', '.join(sorted(replay.required_cases(profile))))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="action")
+    init = commands.add_parser("init", help="read device identity and create a package")
+    init.add_argument("id")
+    init.add_argument("--owner", required=True)
+    source = init.add_mutually_exclusive_group(required=True)
+    source.add_argument("--address")
+    source.add_argument("--info", type=Path, help="previous complete bluetoothctl info output")
+    init.add_argument("--adapter", choices=[r["id"] for r in descriptors() if r.get("entry")])
+    init.add_argument("--parameters", help="JSON object; only observed settings")
+    init.add_argument("--model-id")
+    commands.add_parser("sync", help="generate device registry and README section")
+    check = commands.add_parser("check", help="report package readiness (nonzero if incomplete)")
+    check.add_argument("id", nargs="?")
+    check.add_argument("--base", default=os.environ.get("CHECK_BASE"))
+    check.add_argument("--json", action="store_true")
+    check.add_argument("--markdown", action="store_true")
+    check.add_argument("--summary", type=Path, help="append the same report to a CI summary file")
+    for action in ("capture", "live"):
+        cmd = commands.add_parser(action, help="owner-run adapter " + action + "; release the competing bridge first")
+        cmd.add_argument("id")
+        cmd.add_argument("--address", required=True)
+        cmd.add_argument("--ble-address")
+        cmd.add_argument("--model-id")
+        cmd.add_argument("--output", type=Path, help="new capture JSONL path, default package/capture.jsonl")
+    session = commands.add_parser("session", help="prepare a replay skeleton from capture.jsonl")
+    session.add_argument("id")
+    args = parser.parse_args()
+    if args.action is None:
+        if not sys.stdin.isatty():
+            parser.print_help()
+            return 0
+        print(subprocess.check_output(["bluetoothctl", "devices"], text=True, timeout=15))
+        address = input("Your headphones' address: ").strip()
+        owner = input("Your GitHub login: ").strip().lstrip("@")
+        slug = input("Device id (for example brand-model-name): ").strip()
+        args = parser.parse_args(["init", slug, "--owner", owner, "--address", address])
+    if args.action in ("init", "session", "capture", "live", "sync"):
+        isolated()
+    if args.action == "init":
+        initialize(args)
+    elif args.action == "sync":
+        isolated()
+        print("Updated:", ", ".join(contribution.generate(write=True)) or "already current")
+    elif args.action == "check":
+        directories = [package(args.id)] if args.id else [directory for directory, _profile in profiles.packages()]
+        reports = [contribution.readiness(d) for d in directories]
+        repo = {"device": "repository", "checks": []}
+        for name, fn in (("generated registry/gallery", contribution.generate),
+                         ("owner packages", lambda: contribution.immutable(base=args.base))):
+            try:
+                detail = fn()
+                repo["checks"].append({"check": name, "passed": True, "detail": detail or "OK"})
+            except Exception as error:
+                repo["checks"].append({"check": name, "passed": False, "detail": str(error)})
+        repo["passed"] = all(c["passed"] for c in repo["checks"])
+        reports.append(repo)
+        if args.summary:
+            with args.summary.open("a") as output:
+                output.write(contribution.markdown(reports) + "\n")
+        if args.json:
+            print(json.dumps(reports, indent=2))
+        elif args.markdown:
+            print(contribution.markdown(reports))
+        else:
+            for report in reports:
+                for item in report["checks"]:
+                    print("%s  %s: %s — %s" % ("OK" if item["passed"] else "MISSING/FAILED", report["device"], item["check"], item["detail"]))
+        return 0 if all(r["passed"] for r in reports) else 1
+    elif args.action == "session":
+        isolated()
+        scaffold_session(package(args.id))
+    else:
+        isolated()
+        directory = package(args.id)
+        profile = profiles.load(directory)
+        target = args.output or directory / ("probe.jsonl" if args.action == "capture" else "capture.jsonl")
+        if target.exists():
+            raise ValueError("capture exists; choose a new --output file")
+        command = command_for(profile, args, target)
+        if args.action == "capture":
+            print("Waiting up to 15 seconds for initial replies; no control commands are sent.", flush=True)
+            client = live.Client(command)
+            try:
+                state = client.wait(lambda state: live.initial_ready(profile, state), timeout=15)
+                print(json.dumps(state, indent=2), flush=True)
+                time.sleep(2)
+            finally:
+                client.close()
+            print("Probe saved to", target, "; next run tools/add-device live", args.id, "--address", args.address)
+            return 0
+        with (directory / "hardware-check.json").open("x") as output:
+            previous = {sig: signal.signal(sig, live.interrupt) for sig in (signal.SIGINT, signal.SIGTERM)}
+            client = None
+            try:
+                client = live.Client(command)
+                report = live.run(profile, directory, client, output, prompt=input)
+            finally:
+                for sig, handler in previous.items():
+                    signal.signal(sig, handler)
+                if client:
+                    client.close()
+            print("Adapter check:", "passed" if report["passed"] else "FAILED", "; restoration:", report["restoration"])
+            print("Record remaining checks in owner-checks.json, implementation:", report["implementation"])
+            return 0 if report["passed"] else 1
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (ValueError, OSError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+        print("add-device:", error, file=sys.stderr)
+        sys.exit(1)

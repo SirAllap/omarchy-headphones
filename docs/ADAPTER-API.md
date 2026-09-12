@@ -1,297 +1,236 @@
-# Device adapter API v1
+# Device adapter API v1 — combined design
 
-Omaphones owns the device process, Bluetooth transport, timers, observed state,
-command validation, battery-source selection, restart policy and UI. An adapter
-owns only the device's wire protocol. A model supplies the differences that can
-be decided from identity before the first frame is sent.
+This version combines the shared event/effect runtime with one contribution
+package per model. Contributors implement protocol bytes once. Live operation,
+recording, replay and fault tests all drive the same `Protocol` and `Session`.
 
-This API is implemented by `omaphones-device`, `omaphones/` and `adapters/`.
-Sony and JBL use it. The other five bridges remain on the original
-[bridge contract](../BRIDGE.md) through explicit compatibility metadata. Their
-protocols, pins and command bytes have not been changed.
+**Existing supported headphones still launch their original bridges.** All
+original bridge files, owner pins, captures and canonical tests remain intact.
+The eight native codecs are migration candidates and reusable starting points
+for new, exactly identified models. Automated fixture tests do not constitute
+owner hardware approval of these codecs or this QML revision.
 
-## Ownership
-
-| Work | Owner |
-| --- | --- |
-| Discover BlueZ devices and Fast Pair identity | Omaphones |
-| Resolve adapter claims and model parameters | Omaphones registry |
-| Register a profile, open RFCOMM, run the GATT helper | Omaphones transport |
-| Wait, cancel timers, close descriptors, reap children | Omaphones runtime |
-| Interpret headers, checksums, payloads and notifications | Adapter |
-| Choose handshake/query frames and protocol retry timing | Adapter |
-| Maintain sequence numbers, ACK queue and incomplete input | Adapter |
-| Execute a requested protocol delay | Omaphones clock |
-| Merge reports, suppress duplicates, validate controls | Omaphones state |
-| Store support history and choose a battery source | Omaphones |
-| Draw controls, send notifications, pause media | Omaphones |
-| Supply observed model variants and evidence | Model author |
-
-Protocol retries are not transport retries. The runtime never automatically
-repeats a command. The adapter decides whether another frame is appropriate;
-the host runs its timer. Reconnecting starts a fresh adapter and state store.
-
-## Package
+## One model, one package
 
 ```
-adapters/<id>/
-  adapter.json
-  protocol.py
-  models/<model-id>.json
-  pins/<model-id>.json
-  captures/<model-id>.txt
-  tests/protocol_test.py
+devices/<id>/
+  device.json
+  identity.txt
+  protocol.py          # only when a shared codec cannot express this protocol
+  capture.jsonl
+  session.json
+  test_adapter.py
+  protocol.md
+  hardware-check.json
+  owner-checks.json
+  screenshot.png
 ```
 
-Existing owner pins and captures stay in their original directories. Model
-records can reference them without moving or rewriting them. Original bridge
-executables stay available as regression references and for explicit comparison;
-the QML launcher selects the new runtime for Sony and JBL.
+Shared codecs live in `adapters/<brand>/protocol.py`, with their parameter and
+transport schemas in `adapter.json`. `referenceModels` is private compatibility
+metadata for replaying old pins; new contributors never add models there.
+There is no second author-maintained model registry.
 
-`adapter.json` contains `apiVersion: 1`, `id`, `status`, `priority`, `match`,
-`entry` and `transport`. `status: draft` excludes a package from runtime routing.
-Matching supports exact service `uuids`, a `uuidPrefix`, or the existing
-`ble: true` fallback. Lower priorities are considered first. Priorities are
-unique, overlapping UUID/prefix claims are rejected, and the BLE fallback is
-last. A native GATT adapter can use an exact UUID claim; requiring a BLE address
-is separate from claiming every Fast Pair device.
+A device manifest declares API version, id, model, GitHub owner, `draft` or
+`active` status, exact identity, adapter definition and observed capabilities.
+Here is a schema example; the identity and transport are placeholders:
 
-A model contains `id`, `match`, `parameters`, `owners`, `pins` and `captures`.
-Match all supplied identity fields: exact reported `name`, Fast Pair `modelId`,
-or `uuidSuffix` in the complete advertised UUID list. More than one matching
-model is an error. Use the reported name for model identity. The current QML caller retains its
-historical display-name fallback when BlueZ supplies no device name; changing
-that fallback is a separate routing change, not part of this migration.
+```json
+{
+  "apiVersion": 1,
+  "id": "brand-model",
+  "model": "Reported model name",
+  "owner": "owner-login",
+  "status": "draft",
+  "match": {
+    "names": ["Reported model name"],
+    "uuids": ["10000000-0000-0000-0000-000000000001"]
+  },
+  "adapter": {
+    "module": "protocol.py",
+    "parameters": {},
+    "transport": {"kind": "rfcomm", "channels": [1]}
+  },
+  "capabilities": {"noise.mode": {"values": ["off", "anc"]}}
+}
+```
 
-Parameters must be declared in the adapter's `parameterSchema`. Supported
-parameter types are `boolean`, `integer`, `string` and `array`, with `required`
-and optional allowed `values`. The adapter's `unknownModel` and `namelessModel`
-are explicit defaults; known model rows are never inferred from another model.
-Sony's `wear` flag retains exactly its prior known/unknown/nameless behavior.
-Draft model records never participate in selection.
+A reusable adapter uses `"id": "sony"` instead of `module`, plus explicit
+model parameters such as `{"wear": false}` and observed transport overrides.
+RFCOMM `channels` and profile `uuidPreference` must be supplied for each new
+model; scaffolded lists are empty until the owner fills them. A Soundcore model
+must also supply its observed `offset` and `query` behavior. These values must
+come from this device, not from a sibling's table.
 
-A model can also declare `transport` overrides for fields the adapter lists in
-`modelTransportFields`: `channels`, `uuidPreference`, `writeHandle`, or
-`notifyHandle`. The host resolves and validates them before opening a channel.
-For example, an observed RFCOMM channel difference is a model record containing
-`"transport": {"channels": [28]}`; it does not require protocol code or a new
-adapter. Known model overrides never widen another model's transport. A profile
-UUID preference is intersected with the actual advertised UUID list.
+Each package declares one exact reported name and **every** required UUID.
+Routing requires all of them. An
+optional six-digit `modelId` must also match; GATT packages require it and an
+observed BLE address. Shared UUIDs alone cannot select a device package. Active
+packages cannot overlap an existing owner's known model name or another active
+package identity. Drafts are inert. All unmatched devices retain legacy routing
+and launch arguments, including Bose QC45 from main 1.3.2.
 
-## Adapter
-
-Subclass `omaphones.api.Protocol`. Implement:
+## Protocol boundary
 
 ```python
+from omaphones.api import Protocol
+
 class Adapter(Protocol):
     def connected(self):
-        # Request only the handshake this device was observed to answer.
-        pass
+        pass  # Send the observed handshake/query.
 
     def received(self, data):
-        # Parse bytes; report only what this device actually answered.
-        pass
+        pass  # Frame and validate replies; report actual observations.
 
     def command(self, control, value):
-        # Encode an already validated request using reported protocol state.
-        pass
+        pass  # Encode a validated request. Do not report its desired result.
 ```
 
-The host calls `on_event(Event(...))`, which returns an ordered list of effects.
-The convenience methods accumulate those effects; they do not perform I/O.
+| Protocol operation | Shared host responsibility |
+|:--|:--|
+| `write(bytes)` | Send bytes, buffering partial writes |
+| `schedule(ms, "method", *args)` | Run a one-shot timer and return its token |
+| `cancel_timer(token)` | Cancel that timer |
+| `report(values, capabilities)` | Validate, limit, merge and deduplicate observations |
+| `next_endpoint()` | Close the current RFCOMM candidate and try the next declared channel |
+| `finish(code, message)` | Stop once, cancel timers and close resources |
 
-| Event kind | Payload |
-| --- | --- |
-| `connected` | Transport is ready; for GATT, discovery and subscription policy have completed |
-| `received` | `bytes`; arbitrary stream chunks for RFCOMM, complete notification values for GATT |
-| `command` | `control` identifier and typed `value` |
-| `timer` | Token returned by `schedule()` |
-| `disconnected` | Transport failure reason |
-| `stop` | Clean shutdown |
+The adapter owns framing, sequence numbers, checksums, ACK queues and protocol
+retry decisions. The host owns OS resources, transport retries, clocks,
+subprocesses, command validation, capture and shell integration. Adapters have
+no `run()`/`replay()` transport implementations and do not patch old bridge
+classes. The import checker enforces this review boundary; it is not a sandbox
+for hostile Python.
 
-| Adapter method | Effect |
-| --- | --- |
-| `write(bytes)` | `Send`: exact bytes on the selected transport |
-| `schedule(milliseconds, "method_name", *args)` | `Schedule`: host timer; returns a token |
-| `cancel_timer(token)` | `CancelTimer`: remove the pending callback |
-| `report(values, capabilities)` | `Report`: validate and merge device observations |
-| `finish(code, message)` | `Finish`: end the conversation once |
+Events are `connected`, `received` (bytes), `command`, `timer`, `disconnected`
+and `stop`. Stream input may be split at any byte; GATT input is a notification
+payload. Each connection gets a new protocol instance and state store.
+Exit codes are 0 clean stop, 1 transient failure, 3 connected but unanswered
+mode query, and 4 setup failure. A failed connection must not retire a model.
+New device packages do not modify the legacy global model-support cache.
 
-Timers are one-shot. Repeating a protocol query requires explicitly scheduling
-the next query. Timer callbacks name methods on this adapter instance. The first
-ending wins, all timers are cancelled, and late events cannot send more bytes.
+## Observed capabilities
 
-Exit codes retain the original contract: `0` clean stop, `1` transient connection
-or protocol failure, `3` connected and asked but silent, `4` setup failure. Code
-3 requires an actual completed transport setup and an unanswered query; a failed
-connection or subscription must not retire a model.
+| Key | Declaration |
+|:--|:--|
+| `noise.mode` | `values`: subset of off, anc, ambient, talkthru |
+| `ambient.level` | Integer min, max, step |
+| `ambient.focus_on_voice` | `type: boolean` |
+| `noise.wind_reduction` | `type: boolean`; distinct from focus on voice |
+| `anc.strength` | `values`: subset of low, mid, high, adaptive |
+| `audio.low_latency` | `type: boolean` |
+| `wear.detected` | `type: boolean`, `readOnly: true` |
+| `battery` | `readOnly: true`, observed `parts`: left/right/case or headset |
 
-The adapter receives only model parameters. It cannot reach QML, another device,
-settings, cache files, sockets or the GLib clock through this API. The boundary
-checker rejects platform imports and direct file/process operations. This is a
-reviewable code boundary, **not a security sandbox for untrusted Python**.
+For battery, also declare `batterySource`: bridge, fast-pair or bluez. Only
+bridge-sourced battery values enter protocol state. The follower selects the
+declared source for new packages; BlueZ remains the fallback when detailed
+levels are unavailable. Existing devices retain their current source order.
 
-## Capabilities and state
+The host intersects reported capabilities with the model declaration. A control
+is writable only after a valid value has actually been observed. Commands
+cannot publish state. Soundcore's new codec keeps level/wind parameters as
+observations until RX; Nothing's new codec exposes ANC strength only after an
+observed strength and keeps stale case level only within the current session.
+Those differences do not change either original bridge or its owner's pins.
 
-A report declares supported controls and supplies observations. For example:
-
-```python
-self.report(
-    {"noise.mode": "ambient", "ambient.level": 10,
-     "ambient.focus_on_voice": False},
-    {"noise.mode": {"values": ["off", "anc", "ambient"]},
-     "ambient.level": {"min": 0, "max": 20, "step": 1},
-     "ambient.focus_on_voice": {"type": "boolean"}},
-)
-```
-
-This is an API-shape example, not device evidence.
-
-| Identifier | Shape |
-| --- | --- |
-| `noise.mode` | Subset of `off`, `anc`, `ambient`, `talkthru` |
-| `ambient.level` | Integer `min`, `max`, `step` |
-| `ambient.focus_on_voice` | Boolean |
-| `noise.wind_reduction` | Boolean; distinct from focus on voice |
-| `anc.strength` | Subset of `low`, `mid`, `high`, `adaptive` |
-| `audio.low_latency` | Boolean |
-| `wear.detected` | Boolean, `readOnly: true` |
-| `battery` | `readOnly: true`; `left`, `right`, `case`, `headset`, `charging`, `caseStale` |
-
-The runtime rejects unsupported, out-of-range and sensor-write commands. A
-control becomes writable only after its value has been reported. Omitted report
-fields keep their prior value within this session. Identical reports do not
-produce duplicate output. A fresh connection has no observed values.
-
-Sending a SET or receiving a transport ACK does not establish the new setting.
-The adapter must wait for a reply/notification, or schedule a protocol readback.
-The host does not change observed values on a command.
-
-The stdout snapshot includes `apiVersion`, `values` and `capabilities`, plus the
-legacy fields consumed by existing IPC and panel code. The compatibility
-projection belongs to `omaphones/state.py`, not to adapters. stdin accepts
-`{"apiVersion":1,"control":"noise.mode","value":"anc"}` per line;
-the host also accepts the original bridge commands for manual callers.
-
-The UI knows standard capability names. It does not know vendor command
-spellings or model-specific ranges. A new capability needs a deliberate shared
-API/UI extension; arbitrary plugin-defined UI is outside v1.
+The host emits `apiVersion`, `values`, `capabilities` and a legacy projection for
+existing panel/IPC consumers. It accepts one JSON command per stdin line:
+`{"apiVersion":1,"control":"noise.mode","value":"anc"}`.
+Protocol-specific spelling remains outside the UI.
 
 ## Transports
 
-All transport parameters describe observed behavior. No dependencies beyond the
-ones already used by Omaphones are introduced.
+| Kind | Model transport settings |
+|:--|:--|
+| `bluez-profile` | Ordered observed `uuidPreference`, intersected with identity UUIDs |
+| `rfcomm` | Ordered observed `channels` (1–30) |
+| `ble-gatt` | Observed `writeHandle` and `notifyHandle`, plus Fast Pair BLE identity |
 
-| Kind | Configuration |
-| --- | --- |
-| `bluez-profile` | `uuidPreference`; optional profile name/path and connection timing |
-| `rfcomm` | Ordered `channels`, optional `connectTimeout` in milliseconds |
-| `ble-gatt` | `writeHandle`, `notifyHandle`, `addressField: bleAddress`, address type and deadlines |
+Profile `replyTimeout` and `connectTimeout` are D-Bus seconds. Profile delay and
+retry, RFCOMM connect timeout/retry, and GATT discovery/registration deadlines
+are milliseconds. `connectAttempts` is a count. The legacy JBL subscription
+fallback remains explicit in its shared codec metadata. GATT capture records
+notification values and successfully submitted client-command payloads, not
+HCI packets or proof of over-the-air delivery.
 
-For `bluez-profile`, `replyTimeout` and `connectTimeout` are D-Bus seconds;
-`connectDelay` and `connectRetry` are milliseconds and `connectAttempts` is a
-count. For GATT, `discoveryTimeout` and `registerTimeout` are milliseconds.
-`allowUnconfirmedSubscription` defaults to false; JBL explicitly retains its
-existing five-second fallback policy, followed by the two two-second frame gaps.
+## Owner workflow
 
-The direct RFCOMM transport has deterministic callback tests. No currently
-migrated adapter uses it, so its physical Bluetooth behavior still needs an
-owner's test before a model is moved onto it.
-
-A GATT transport filters notification handles and validates the reported payload
-length before handing bytes to the adapter. A stream transport handles partial
-writes and delivers a final readable chunk before disconnect. These are host
-responsibilities, not protocol framing rules.
-
-## Author workflow
-
-Work in an isolated clone. Create a draft adapter using an **observed** service
-UUID and an available priority:
+Work in an isolated checkout. Release the competing mode bridge before any
+probe or live run, and restore its setting afterwards.
 
 ```
-tools/new-adapter <id> --uuid <observed-uuid> --priority <number>
+tools/add-device init brand-model --owner owner-login --address AA:BB:CC:DD:EE:FF --adapter sony
 ```
 
-`--transport rfcomm` requires observed `--channel` values. `--transport ble-gatt`
-requires observed `--write-handle` and `--notify-handle` values. The generator
-writes no protocol bytes and creates a failing evidence-test placeholder.
+Use `--info identity.txt` for a previously saved complete `bluetoothctl info`
+record. Omit `--adapter` for a model-local protocol skeleton. Add `--model-id`
+for a GATT model. The tool creates an inert draft with unknown parameters,
+empty capabilities and failing fault-test placeholders. It never copies another
+owner's evidence or invents protocol bytes.
 
-For an already native adapter:
-
-```
-tools/new-model <adapter> <model-id> --name '<reported-name>' --owner '<owner>' --parameters '<json>'
-```
-
-`--model-id` or `--uuid-suffix` can replace `--name`. Optional
-`--transport '<json>'` supplies observed model transport overrides. The model is a draft until
-you add its evidence and explicitly change its status. A legacy adapter still
-uses its existing model table and owner workflow; this generator refuses to
-pretend that a descriptor changes that old bridge.
-
-Keep the exact capture, then add an API pin with `apiVersion: 1`, `adapter`,
-`model`, `owner`, `capture`, `context` and `steps`. A step has one action or
-assertion, plus an optional `note`:
-
-| Action/assertion | Meaning |
-| --- | --- |
-| `event: "connected"` | Opened transport; `stop` and `disconnected` are also available |
-| `device: "hex bytes"` | Recorded input; arbitrary chunks for a stream protocol |
-| `command: {control, value}` | Typed user request through the runtime validator |
-| `advance: milliseconds` | Advance the deterministic host clock |
-| `sent: ["hex bytes", ...]` | All exact writes so far, in order |
-| `values: {...}` | Complete current observed state |
-| `reports: [...]` | All versioned snapshots so far |
-| `exit: null/number` | Current exit decision |
-
-`omaphones.testing.Replay` runs the same Session as the live process. Tests under
-`adapters/<id>/tests/*_test.py` are discovered by the shared checker. Cover the
-applicable [canonical scenarios](CANONICAL-TESTS.md), including spontaneous
-changes, unsupported requests, fragmentation/damage, timeout, shutdown and peer
-isolation. Label synthetic faults separately from recorded responses. A pin
-replay proves behavior against supplied inputs; it is not an independent claim
-that those inputs came from hardware.
+Fill the manifest from this device's replies, then use:
 
 ```
-tools/check-adapter <id> --include-drafts
-tools/build-adapter-registry
+tools/add-device capture brand-model --address AA:BB:CC:DD:EE:FF
+tools/add-device live brand-model --address AA:BB:CC:DD:EE:FF
+tools/add-device session brand-model
+tools/add-device check brand-model
+```
+
+GATT also requires `--ble-address`. `capture` records an initial probe without
+control commands. `live` records `capture.jsonl`, observes initial settings,
+exercises declared controls, prompts for a physical/app mode change and repeated
+status, sends an unsupported API request, and attempts restoration even after
+failure/interruption. `hardware-check.json` records success or failure and a
+hash of the actual implementation. Existing evidence files are never silently
+overwritten; `--output` selects a new capture path. Archive failed runs before
+rerunning, and put the reviewed successful capture at `capture.jsonl`.
+
+The replay skeleton deliberately leaves state expectations unapproved. Review
+these against the actual replies and protocol notes, then label coverage cases.
+`feed` references a captured RX, command, timer or lifecycle event id; `sent`
+references all captured TX ids so far; `expect` is the complete versioned
+snapshot, optionally carrying a `case`. Replay preserves every input in order
+and checks exact transmitted bytes. Stream replay additionally splits each RX
+at every possible boundary. Empty captures, wrong identity, missing TX, skipped
+inputs and self-declared legacy exemptions fail.
+
+Required cases include initial state, each writable enum/boolean value and
+numeric endpoint, external change, repeated state, unsupported command, and
+observed bridge battery/wear readings when declared. A response to a pending
+command cannot be labelled external change. Synthetic damage belongs in
+`test_adapter.py`, separately from the raw capture. Required fault scenarios
+cover silence, disconnect, invalid frame, coalesced input, repeated input and
+unsupported commands. Test names alone do not prove coverage: review the tests.
+
+Fill `owner-checks.json` with current implementation hash and concrete shell
+integration/reconnect observations, plus wear and non-bridge battery checks when
+applicable. Record peer isolation, charging and acoustics as passed, untested or
+not applicable with an explanation. Add real protocol notes and the owner's
+panel screenshot. These remain owner attestations; software cannot authenticate
+that an image or capture came from hardware.
+
+For staged shell testing, temporarily activate the package in an isolated staged
+copy. After all checks are complete, set `status: active` in the contribution:
+
+```
+tools/add-device sync
 tools/check
 ```
 
-Activate a package/model only after its evidence and tests are complete. Rebuild
-the registry after activation. `Model.js` contains a generated registry block
-because both QML and the existing Deno tests load it as a plain script. Do not
-edit the generated block. `tools/check` checks that it exactly matches package
-metadata. No bridge row or command branch needs to be added by hand.
+`sync` generates the single BACKENDS block and README device table/gallery.
+`check --json` and `check --markdown --summary <file>` expose the same readiness
+report to contributors and CI. CI checks all active packages and protects
+existing package evidence against modification. Adding a package does not
+publish a release or deploy it to the running shell.
 
-README/gallery and release metadata remain curated product documentation; adding
-a package does not publish, release or validate hardware. Use the actual owner's
-screenshot and final-revision test report.
+## Validation boundary
 
-## Migration and review gates
-
-| Stage | Current state |
-| --- | --- |
-| Event/effect API, host state and three transports | Implemented; automated tests |
-| Declarative registry and model parameters | Implemented |
-| Sony codec and JBL codec | Native adapters; all existing pins replayed unchanged |
-| Capability-based UI commands | Implemented; old bridge spelling translated from metadata |
-| Author generators and package checker | Implemented |
-| Samsung/Nothing/Xiaomi/Soundcore/OPPO codecs | Legacy process compatibility; separate migration pending |
-| Physical Sony/JBL checks of this revision | Pending; earlier hardware reports do not validate this revision |
-| Deployment/release | Not performed |
-
-The legacy bridges remain byte-for-byte reference implementations. This makes
-comparison inspectable and permits an owner to test both paths. Remove each
-reference only in a later reviewed migration, preserving its pins and tests.
-
-Do not mechanically port behavior that contradicts reported-state semantics.
-For example, the existing Soundcore bridge reports some level/wind changes
-immediately after sending them. Changing that needs a separate behavior decision
-and owner confirmation, rather than silently modifying its frozen contract here.
-
-The next hardware check must use this checkout's `omaphones-device` or this
-checkout's staged QML. Running `tools/check-live` against the currently active
-plugin would test the old code. Release the competing device channel before
-starting the staged process, record the revision and initial settings, request
-only the intended controls, verify device-reported results, and restore and
-verify the initial state. Document reconnect and Fast Pair separately.
+Sony/JBL native codecs replay their original pins. Samsung, Xiaomi, OPPO and
+Bose additionally check frozen wire/state exchanges; all six added stream codecs
+exercise fixture fragmentation/coalescing, silence, stop and specific state
+regressions. Original bridges and their full owner suites still run separately.
+The shared transport tests use controlled endpoints, not a Bluetooth radio.
+Physical transport behavior, panel integration and new codec behavior need
+owner testing before migration. No supported model has been migrated here.

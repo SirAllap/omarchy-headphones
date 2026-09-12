@@ -92,21 +92,27 @@ Item {
   //      Message Stream, or Fast Pair switched off — and only while the bridge
   //      is up and answering, for the reason the stream's levels go with the
   //      reader: a figure nobody is updating must not read as current.
-  readonly property bool bridgeBattery: ancLive && !streaming
+  readonly property string packageBatterySource: {
+    var row = Model.backendRow(controlBackend)
+    return row && row.profile ? row.batterySource : "legacy"
+  }
+  readonly property bool streamBattery: streaming && (packageBatterySource === "legacy" || packageBatterySource === "fast-pair")
+  readonly property bool bridgeBattery: ancLive && !streamBattery
+    && (packageBatterySource === "legacy" || packageBatterySource === "bridge")
     && (Model.bridgeLevel(ancState, "left") >= 0 || Model.bridgeLevel(ancState, "right") >= 0
         || Model.bridgeLevel(ancState, "case") >= 0 || Model.bridgeLevel(ancState, "headset") >= 0)
 
-  readonly property int leftLevel: streaming ? Model.readerLevel(reading, "left")
+  readonly property int leftLevel: streamBattery ? Model.readerLevel(reading, "left")
     : (bridgeBattery ? Model.bridgeLevel(ancState, "left") : -1)
-  readonly property int rightLevel: streaming ? Model.readerLevel(reading, "right")
+  readonly property int rightLevel: streamBattery ? Model.readerLevel(reading, "right")
     : (bridgeBattery ? Model.bridgeLevel(ancState, "right") : -1)
-  readonly property int caseLevel: streaming ? Model.readerLevel(reading, "case")
+  readonly property int caseLevel: streamBattery ? Model.readerLevel(reading, "case")
     : (bridgeBattery ? Model.bridgeLevel(ancState, "case") : -1)
-  readonly property bool leftCharging: streaming ? reading.leftCharging === true
+  readonly property bool leftCharging: streamBattery ? reading.leftCharging === true
     : (bridgeBattery && Model.bridgeCharging(ancState, "left"))
-  readonly property bool rightCharging: streaming ? reading.rightCharging === true
+  readonly property bool rightCharging: streamBattery ? reading.rightCharging === true
     : (bridgeBattery && Model.bridgeCharging(ancState, "right"))
-  readonly property bool caseCharging: streaming ? reading.caseCharging === true
+  readonly property bool caseCharging: streamBattery ? reading.caseCharging === true
     : (bridgeBattery && Model.bridgeCharging(ancState, "case"))
   readonly property bool perBud: leftLevel >= 0 || rightLevel >= 0
   // The case only reports while it is open. The Nothing bridge keeps its last
@@ -118,11 +124,11 @@ Item {
   // name and no case to report, so the panel draws one row and the bar fills
   // both halves of the mark with the same figure. `perBud` deliberately stays
   // false here, because there are no buds to compare.
-  readonly property bool single: streaming ? reading.single === true
+  readonly property bool single: streamBattery ? reading.single === true
     : (bridgeBattery && Model.bridgeLevel(ancState, "headset") >= 0)
   readonly property int singleLevel: !single ? -1
-    : (streaming ? Model.readerLevel(reading, "battery") : Model.bridgeLevel(ancState, "headset"))
-  readonly property bool singleCharging: single && (streaming ? reading.batteryCharging === true
+    : (streamBattery ? Model.readerLevel(reading, "battery") : Model.bridgeLevel(ancState, "headset"))
+  readonly property bool singleCharging: single && (streamBattery ? reading.batteryCharging === true
     : Model.bridgeCharging(ancState, "headset"))
 
   readonly property string modelId: String(reading.modelId || "")
@@ -169,7 +175,7 @@ Item {
   property var ancState: ({})
   property bool ancEnabled: true
   readonly property bool bleWanted: useModeControl && useFastPair && ancEnabled && connected
-    && controlBackend !== "" && !classicBackend
+    && controlBackend !== "" && !classicBackend && !classicBridge.running
     && bleAddress !== ""
     && (cacheByModel ? modeSupportKnown !== 0 && !ancModelParked : !addressParked)
   property bool bleArmed: false
@@ -182,12 +188,13 @@ Item {
   property string ancRunError: ""
   property string ancErrorRaw: ""
   property bool classicEnabled: true
+  property bool classicRestartWanted: false
   // Same delayed arm as bleArmed: `command` and `running` both depend on the
   // SDP probe, and QML does not promise which binding settles first. Seen live
   // on a WH-1000XM5, the Process started as QList("", address) before the
   // UUIDs arrived and then never ran sony-bridge.
   readonly property bool classicWanted: useModeControl && classicEnabled && connected
-    && classicBridgePath !== ""
+    && classicBridgePath !== "" && !ancBridge.running
     && !addressParked
   property bool classicArmed: false
   onClassicWantedChanged: {
@@ -198,7 +205,15 @@ Item {
   // What this device serves, read once per connection with `bluetoothctl info`.
   // Empty while it is not connected, or while the probe is still out.
   property var deviceUuids: []
-  readonly property string controlBackend: Model.controlBackend(deviceUuids, bleAddress)
+  readonly property string controlBackend: Model.controlBackend(deviceUuids, bleAddress, reportedName, modelId)
+  onControlBackendChanged: {
+    // Late exact identity can replace a legacy fallback on the same transport.
+    if (ancBridge.running) bounceAncBridge()
+    if (classicBridge.running) {
+      classicRestartWanted = true
+      classicEnabled = false
+    }
+  }
   readonly property bool classicBackend: Model.isClassicBackend(controlBackend)
   // The adapter declares its transport UUID preference; the shell supplies
   // only a UUID actually advertised by this device.
@@ -283,7 +298,7 @@ Item {
   readonly property int ambientMax: ambientRange.max
   readonly property string ambientVoiceLabel: ambientToggle === "noise.wind_reduction" ? "Wind noise reduction" : "Focus on voice"
 
-  readonly property int bluezLevel: Model.batteryLevel(device)
+  readonly property int bluezLevel: packageBatterySource === "none" ? -1 : Model.batteryLevel(device)
   // The bar carries one number: the headset's own figure where there is only
   // one, otherwise the earbud that dies first, or BlueZ's rounded single figure
   // when the Message Stream has said nothing.
@@ -713,7 +728,7 @@ Item {
     command: follower.classicBridgePath === ""
       ? ["true"]
       : [follower.classicBridgePath].concat(Model.runnerArgs(follower.controlBackend, {
-          address: follower.address, uuid: follower.transportUuid, name: follower.reportedName, uuids: follower.deviceUuids }))
+          address: follower.address, modelId: follower.modelId, uuid: follower.transportUuid, name: follower.reportedName, uuids: follower.deviceUuids }))
     stdinEnabled: true
     stdout: SplitParser {
       onRead: function(line) { follower.applyAncLine(line) }
@@ -756,13 +771,12 @@ Item {
           : "the listening-mode link dropped (exit " + exitCode + ")")
       }
 
-      // Nothing cycles this bridge on purpose: the channel is the device's own
-      // and its address is this follower's, so there is no rotated address to
-      // follow and no re-aiming to do. Every exit waits out its backoff.
+      var deliberate = follower.classicRestartWanted
+      follower.classicRestartWanted = false
       follower.classicEnabled = false
-      classicRestart.interval = follower.service
-        ? follower.service.ancBackoffFor(follower.address) : 10000
-      if ((exitCode === 1 || exitCode === 4) && follower.service)
+      classicRestart.interval = deliberate ? 600 : (follower.service
+        ? follower.service.ancBackoffFor(follower.address) : 10000)
+      if (!deliberate && (exitCode === 1 || exitCode === 4) && follower.service)
         follower.service.bumpAncBackoff(follower.address)
       classicRestart.restart()
     }

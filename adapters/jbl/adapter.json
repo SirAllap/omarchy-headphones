@@ -43,5 +43,13 @@
     "registerTimeout": 5000,
     "allowUnconfirmedSubscription": true
   },
-  "supportCache": "fast-pair-model"
+  "supportCache": "fast-pair-model",
+  "referenceModels": {
+    "JBL TUNE230NC TWS": {
+      "match": {
+        "name": "JBL TUNE230NC TWS"
+      },
+      "parameters": {}
+    }
+  }
 }

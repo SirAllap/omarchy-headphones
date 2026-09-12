@@ -1040,13 +1040,12 @@ Deno.test('canonical Sony and JBL SDP records select their own bridge', async ()
 
 Deno.test("adapter host arguments preserve identity as JSON and UUID preference", () => {
   const context = { address: "AA:BB:CC:DD:EE:FF", name: 'Sony "quoted" headset', uuid: Model.SONY_MDR_V1_UUID };
-  assertEquals(Model.runnerFor("sony"), "omaphones-device");
-  assertEquals(Model.runnerFor("jbl"), "omaphones-device");
+  assertEquals(Model.runnerFor("sony"), "sony-bridge");
+  assertEquals(Model.runnerFor("jbl"), "jbl-bridge");
   assertEquals(Model.runnerFor("nothing"), "nothing-bridge");
   assertEquals(Model.runnerFor("missing"), "");
   const args = Model.runnerArgs("sony", context);
-  assertEquals(args.slice(0, 2), ["sony", "--context"]);
-  assertEquals(JSON.parse(args[2]), context);
+  assertEquals(args, [context.address, context.uuid, context.name]);
   assertEquals(Model.transportUuidFor("sony", [Model.SONY_MDR_V1_UUID, Model.SONY_MDR_V2_UUID]), Model.SONY_MDR_V2_UUID);
   assertEquals(Model.runnerArgs("nothing", context), [context.address, context.name]);
 });
@@ -1055,14 +1054,17 @@ Deno.test("API capabilities gate commands and keep voice and wind distinct", () 
   const state = { apiVersion: 1, values: {"noise.mode": "anc", "ambient.level": 14, "ambient.focus_on_voice": false, "wear.detected": true},
     capabilities: {"noise.mode": {values: ["off", "anc", "ambient"]}, "ambient.level": {min: 0, max: 20, step: 1},
       "ambient.focus_on_voice": {type: "boolean"}, "wear.detected": {type: "boolean", readOnly: true}} };
-  const command = JSON.parse(Model.controlCommand("sony", state, "ambient.level", 5));
+  Model.BACKENDS.unshift({name: "native-test", runtime: true});
+  try {
+  const command = JSON.parse(Model.controlCommand("native-test", state, "ambient.level", 5));
   assertEquals(command, {apiVersion: 1, control: "ambient.level", value: 5});
   assertEquals(state.values["ambient.level"], 14);
   for (const [key, value] of [["ambient.level", 21], ["ambient.level", NaN], ["ambient.level", 1.5],
       ["noise.mode", "talkthru"], ["wear.detected", false], ["noise.wind_reduction", true], ["ambient.focus_on_voice", "on"]]) {
-    assertEquals(Model.controlCommand("sony", state, key, value), "");
+    assertEquals(Model.controlCommand("native-test", state, key, value), "");
   }
-  assertEquals(Model.controlCommand("sony", {}, "noise.mode", "anc"), "");
+  assertEquals(Model.controlCommand("native-test", {}, "noise.mode", "anc"), "");
+  } finally { Model.BACKENDS.shift(); }
 });
 
 Deno.test("legacy capabilities preserve the existing command bytes", () => {
@@ -1087,4 +1089,21 @@ Deno.test("new runtime adapter uses capabilities without brand branches", () => 
   } finally {
     Model.BACKENDS.shift();
   }
+});
+
+Deno.test("device packages match exact identity and preserve BLE lifecycle routing", () => {
+  const row = {name: "device:test", profile: "test", runtime: true, needsBleAddress: true,
+    deviceMatch: {names: ['Exact "name"'], uuids: ["10000000-0000-0000-0000-000000000001"], modelId: "123abc"}};
+  Model.BACKENDS.unshift(row);
+  const context = {address: "AA:BB:CC:DD:EE:FF", bleAddress: "11:22:33:44:55:66", name: 'Exact "name"', modelId: "123abc", uuids: row.deviceMatch.uuids};
+  try {
+    assertEquals(Model.controlBackend(context.uuids, context.bleAddress, context.name, context.modelId), row.name);
+    assertEquals(Model.isClassicBackend(row.name), false);
+    for (const [ids, ble, name, mid] of [[[], context.bleAddress, context.name, context.modelId], [context.uuids, "", context.name, context.modelId], [context.uuids, context.bleAddress, "different", context.modelId], [context.uuids, context.bleAddress, context.name, "000000"]]) {
+      assertEquals(Model.controlBackend(ids, ble, name, mid) === row.name, false);
+    }
+    const args = Model.runnerArgs(row.name, context);
+    assertEquals(args.slice(0, 3), ["--device", "test", "--context"]);
+    assertEquals(JSON.parse(args[3]), context);
+  } finally { Model.BACKENDS.shift(); }
 });

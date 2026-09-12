@@ -38,6 +38,12 @@ class Finish:
     message: str = ""
 
 
+@dataclass(frozen=True)
+class NextEndpoint:
+    """Protocol rejected a connected candidate; host tries the next declared one."""
+    pass
+
+
 class Protocol:
     """A private conversation per device. Helpers only accumulate effects.
 
@@ -79,6 +85,10 @@ class Protocol:
     def write(self, data):
         if self.exit_code is None:
             self.effects.append(Send(bytes(data)))
+
+    def next_endpoint(self):
+        if self.exit_code is None:
+            self.effects.append(NextEndpoint())
 
     def schedule(self, milliseconds, method, *args):
         if self.exit_code is not None:

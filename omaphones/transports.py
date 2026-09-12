@@ -16,6 +16,7 @@ class Transport:
         self.closed = False
         self.watches = set()
         self.timers = set()
+        self.record = lambda direction, data: None
 
     def watch(self, fd, callback, conditions=None):
         flags = conditions or (self.glib.IO_IN | self.glib.IO_HUP | self.glib.IO_ERR)
@@ -110,6 +111,7 @@ class StreamTransport(Transport):
                 written = os.write(self.fd, self.pending)
                 if not written:
                     raise OSError("zero-length channel write")
+                self.record('tx', bytes(self.pending[:written]))
                 del self.pending[:written]
         except BlockingIOError:
             if self.writer is None:
@@ -214,6 +216,21 @@ class RfcommTransport(StreamTransport):
     def start(self):
         self.socket = None
         self.candidate = 0
+        self.attempt = 1
+        self.connect_next()
+
+    def next_endpoint(self):
+        for token in self.watches | self.timers:
+            self.glib.source_remove(token)
+        self.watches.clear()
+        self.timers.clear()
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+        if self.socket is not None:
+            self.socket.close()
+        self.pending.clear()
+        self.writer = None
         self.connect_next()
 
     def connect_next(self):
@@ -221,6 +238,11 @@ class RfcommTransport(StreamTransport):
             return
         channels = self.config["channels"]
         if self.candidate >= len(channels):
+            if self.attempt < self.config.get('connectAttempts', 1):
+                self.attempt += 1
+                self.candidate = 0
+                self.later(self.config.get('connectRetry', 1500), self.connect_next)
+                return
             self.fail("cannot open the declared RFCOMM channels")
             return
         channel = channels[self.candidate]
@@ -285,6 +307,7 @@ class GattTransport(Transport):
 
     def write(self, data):
         self.tell("write-value %s %s" % (self.config["writeHandle"], " ".join("0x%02x" % b for b in data)))
+        self.record('tx', bytes(data))
 
     def subscription_ready(self):
         if self.ready or self.closed:
