@@ -145,6 +145,10 @@ See [the test record and remaining limits](docs/CMF-REVIEW.md).
 
 ## Add your own headphones
 
+Use `/add-new-bridge` in Codex or Claude, or ask your agent to read
+[the shared skill](.agents/skills/add-new-bridge/SKILL.md). It first checks
+whether an existing bridge suffices, then guides capture, tests and owner validation.
+
 Paste the text below into your AI coding agent (Claude Code, Codex, OpenCode…).
 It adds support for your headphones and opens a pull request here. How the
 existing protocols were found is written down in [PROTOCOL.md](PROTOCOL.md).
@@ -168,7 +172,8 @@ open a pull request against `github.com/ncr/omarchy-headphones` with the result.
 2. If battery and the mode row both already work, no bridge change is needed.
    Still bring my device's own capture, pin and confirmed capabilities from
    step 3, plus its README row and the screenshot from step 4.
-3. Otherwise extend the plugin. Read `AGENTS.md` in the plugin directory
+3. Follow `.agents/skills/add-new-bridge/SKILL.md` in the repository.
+   Read `AGENTS.md` in the plugin directory
    first: it is the map — which files a new model or a new brand touches,
    the bridge contract (`BRIDGE.md`), how a session is pinned
    (`tests/pins/`), and `tools/check`, the one command that runs everything

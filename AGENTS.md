@@ -132,3 +132,6 @@ skipped line names the tool this machine lacks.
 | `PROTOCOL.md` | what every device said, and how it was found |
 | `docs/captures/` | the raw evidence behind a pin |
 | `.agents/skills/land-pr/` | shared PR review and landing workflow; Claude entry point refers here |
+
+For a guided contribution, use `/add-new-bridge` or read
+[the shared skill](.agents/skills/add-new-bridge/SKILL.md) before probing or implementing.
