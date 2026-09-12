@@ -131,4 +131,4 @@ skipped line names the tool this machine lacks.
 | `tools/*_probe.py` | how a protocol is read off a device |
 | `PROTOCOL.md` | what every device said, and how it was found |
 | `docs/captures/` | the raw evidence behind a pin |
-| `.claude/skills/merge-pr/` | how the maintainer reviews and lands a pull request |
+| `.agents/skills/land-pr/` | shared PR review and landing workflow; Claude entry point refers here |
