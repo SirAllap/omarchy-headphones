@@ -3,7 +3,7 @@
   "owner": "Hanz Geeratz",
   "bridge": "nothing-bridge",
   "capture": "docs/captures/nothing-cmf-buds-2.txt",
-  "notes": "NT Link on RFCOMM channel 16 (15 and 28 are refused). Earbuds shape with left and right batteries and case component. Noise control uses the six-byte triplet form 01 <mode> 00 02 <level> 00. What is frozen is every frame the bridge writes and every line it prints.",
+  "notes": "NT Link on RFCOMM channel 16 (15 and 28 are refused). Earbuds shape with left and right batteries and case component. Noise control uses the six-byte triplet form 01 <mode> 00 02 <level> 00. Every mode (off, ambient, anc low/mid/high/adaptive), low latency on/off, and case battery event are verified from the hardware capture.",
   "session": {},
   "steps": [
     {
@@ -48,14 +48,14 @@
       "device": {
         "cmd": "1e",
         "dir": "40",
-        "payload": "01 07 00 02 01 00"
+        "payload": "01 05 00 02 01 00"
       },
-      "note": "ambient, high"
+      "note": "off, high"
     },
     {
       "line": {
         "modes": true,
-        "mode": "ambient",
+        "mode": "off",
         "available": [
           "off",
           "anc",
@@ -89,6 +89,33 @@
       }
     },
     {
+      "command": "set ambient"
+    },
+    {
+      "sent_last": "55 60 01 0f f0 03 00 01 01 07 00 fa 77"
+    },
+    {
+      "device": {
+        "cmd": "0f",
+        "dir": "70",
+        "payload": "00"
+      }
+    },
+    {
+      "device": {
+        "cmd": "03",
+        "dir": "e0",
+        "payload": "01 07 00 02 01 00"
+      },
+      "note": "unsolicited mode change: ambient, high"
+    },
+    {
+      "line_has": {
+        "mode": "ambient",
+        "ancLevel": "high"
+      }
+    },
+    {
       "command": "set anc"
     },
     {
@@ -116,10 +143,10 @@
       }
     },
     {
-      "command": "set ambient"
+      "command": "level adaptive"
     },
     {
-      "sent_last": "55 60 01 0f f0 03 00 01 01 07 00 fa 77"
+      "sent_last": "55 60 01 0f f0 03 00 01 01 04 00 fa 87"
     },
     {
       "device": {
@@ -132,13 +159,182 @@
       "device": {
         "cmd": "03",
         "dir": "e0",
-        "payload": "01 07 00 02 01 00"
+        "payload": "01 04 00 02 04 00"
+      },
+      "note": "unsolicited mode change: anc, adaptive"
+    },
+    {
+      "line_has": {
+        "mode": "anc",
+        "ancLevel": "adaptive"
+      }
+    },
+    {
+      "command": "level low"
+    },
+    {
+      "sent_last": "55 60 01 0f f0 03 00 01 01 03 00 f8 b7"
+    },
+    {
+      "device": {
+        "cmd": "0f",
+        "dir": "70",
+        "payload": "00"
+      }
+    },
+    {
+      "device": {
+        "cmd": "03",
+        "dir": "e0",
+        "payload": "01 03 00 02 03 00"
+      },
+      "note": "unsolicited mode change: anc, low"
+    },
+    {
+      "line_has": {
+        "mode": "anc",
+        "ancLevel": "low"
+      }
+    },
+    {
+      "command": "level mid"
+    },
+    {
+      "sent_last": "55 60 01 0f f0 03 00 01 01 02 00 f9 27"
+    },
+    {
+      "device": {
+        "cmd": "0f",
+        "dir": "70",
+        "payload": "00"
+      }
+    },
+    {
+      "device": {
+        "cmd": "03",
+        "dir": "e0",
+        "payload": "01 02 00 02 02 00"
+      },
+      "note": "unsolicited mode change: anc, mid"
+    },
+    {
+      "line_has": {
+        "mode": "anc",
+        "ancLevel": "mid"
+      }
+    },
+    {
+      "command": "set off"
+    },
+    {
+      "sent_last": "55 60 01 0f f0 03 00 01 01 05 00 fb 17"
+    },
+    {
+      "device": {
+        "cmd": "0f",
+        "dir": "70",
+        "payload": "00"
+      }
+    },
+    {
+      "device": {
+        "cmd": "03",
+        "dir": "e0",
+        "payload": "01 05 00 02 01 00"
+      },
+      "note": "unsolicited mode change: off, high"
+    },
+    {
+      "line_has": {
+        "mode": "off"
+      }
+    },
+    {
+      "command": "latency on"
+    },
+    {
+      "sent_last": "55 60 01 40 f0 01 00 01 01 50 32"
+    },
+    {
+      "device": {
+        "cmd": "40",
+        "dir": "70",
+        "payload": "01"
+      }
+    },
+    {
+      "device": {
+        "cmd": "41",
+        "dir": "40",
+        "payload": "01"
       }
     },
     {
       "line_has": {
-        "mode": "ambient",
-        "ancLevel": "high"
+        "latency": true
+      }
+    },
+    {
+      "command": "latency off"
+    },
+    {
+      "sent_last": "55 60 01 40 f0 01 00 01 02 10 33"
+    },
+    {
+      "device": {
+        "cmd": "40",
+        "dir": "70",
+        "payload": "02"
+      }
+    },
+    {
+      "device": {
+        "cmd": "41",
+        "dir": "40",
+        "payload": "02"
+      }
+    },
+    {
+      "line_has": {
+        "latency": false
+      }
+    },
+    {
+      "device": {
+        "cmd": "01",
+        "dir": "e0",
+        "payload": "03 02 64 03 64 04 55"
+      },
+      "note": "case opened: battery announcement with case at 85%"
+    },
+    {
+      "line_has": {
+        "battery": {
+          "left": 100,
+          "right": 100,
+          "case": 85,
+          "charging": [],
+          "caseStale": false
+        }
+      }
+    },
+    {
+      "device": {
+        "cmd": "07",
+        "dir": "40",
+        "payload": "02 02 64 03 64"
+      },
+      "note": "case closed: query answers left and right only, case retained stale"
+    },
+    {
+      "line_has": {
+        "battery": {
+          "left": 100,
+          "right": 100,
+          "case": 85,
+          "charging": [],
+          "caseStale": true
+        }
       }
     },
     {

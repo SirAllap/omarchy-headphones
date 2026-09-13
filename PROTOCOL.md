@@ -1077,9 +1077,11 @@ Read off hardware (`3C:B0:ED:D0:AC:0B`).
 Channels 15 and 28 are refused; channel 16 connects and speaks the Nothing NT Link protocol.
 - **Channel 16**. The SDP record advertises the shared NT Link UUID (`aeac4a03-dff5-498f-843a-34487cf133eb`). The reported name `CMF Buds 2` selects channel 16.
 - **Device info** (`40 06`): ASCII lines returning firmware version (`1.0.1.52`), unlocking queries.
-- **Battery** (`40 07`): two components on battery (`02` left and `03` right, e.g. `02 02 64 03 64`), and component `04` (case) when the case is open.
-- **Noise control** (`40 1E` / `E0 03`): six-byte triplet form `01 <mode> 00 02 <level> 00`, supporting Off (`05`), Ambient/Transparency (`07`), and ANC (`01`–`04`) with levels. Setting mode sends ACK (`70 0F`) followed by unsolicited event (`E0 03`).
-- **Low latency** (`C0 41` / `40 41`): `01` on, `02` off. Set payload `01` on / `02` off.
+- **Battery** (`40 07` / `E0 01`): query `40 07` answers left and right components (`02 02 64 03 64`). While the case is opened, unsolicited `E0 01` announcements arrive including component `04` (case battery, e.g. `03 02 64 03 64 04 55` -> case 85%). When the case is closed, subsequent queries omit component `04`, and `nothing-bridge` retains the cached case level with `caseStale: true`.
+- **Noise control** (`40 1E` / `E0 03`): six-byte triplet form `01 <mode> 00 02 <level> 00`. Confirmed for all options: Off (`05`), Ambient/Transparency (`07`), and ANC (`01`–`04`) with levels Low (`03`), Mid (`02`), High (`01`), and Adaptive (`04`). Setting each mode produces an ACK (`70 0F`), an unsolicited `E0 03` state event, and is verified on read-back.
+- **Low latency** (`C0 41` / `40 41`): `01` on, `02` off. Setting `F0 40` payload `01` on / `02` off produces an ACK (`70 40`), an `E0 41` event, and is verified on read-back.
+- **Reconnect & mode-control**: turning `useModeControl` off terminates `nothing-bridge` and frees RFCOMM channel 16; turning it on reconnects within ~2 seconds and restores state. Bridge process termination triggers clean recovery and reconnect in `DeviceFollower.qml`.
+- **Unavailable & untested**: continuous ambient dial (`ambientLevel` unsupported, discrete mode only), in-ear wear detection (`worn` unsupported on this channel), charging state bits (buds were 100%), multipoint dual-connection isolation, and acoustic tuning remain unobserved/untested on hardware.
 
 ### The probe
 

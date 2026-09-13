@@ -17,9 +17,9 @@ bridge = harness.load_bridge("nothing-bridge")
 CAPTURE = pathlib.Path(harness.ROOT) / "docs/captures/nothing-headphone-pro.txt"
 
 
-def captured():
+def captured(path=CAPTURE):
     rows = []
-    for number, line in enumerate(CAPTURE.read_text().splitlines(), 1):
+    for number, line in enumerate(path.read_text().splitlines(), 1):
         found = re.search(r"\b55(?: [0-9a-fA-F]{2})+", line)
         if found and "device-info    answer" not in line:
             rows.append((number, "<-" if "<-" in line else "->",
@@ -28,6 +28,16 @@ def captured():
 
 
 ROWS = captured()
+BUDS2_CAPTURE = pathlib.Path(harness.ROOT) / "docs/captures/nothing-cmf-buds-2.txt"
+BUDS2_ROWS = captured(BUDS2_CAPTURE)
+
+
+def rx_buds2(command, direction, payload):
+    for _, flow, raw in BUDS2_ROWS:
+        if (flow == "<-" and raw[3:5] == bytes((command, direction))
+                and raw[8:8 + int.from_bytes(raw[5:7], "little")] == bytes.fromhex(payload)):
+            return raw
+    raise AssertionError("response absent from CMF Buds 2 capture: %02x %02x %s" % (command, direction, payload))
 
 
 def rx(command, direction, payload):
@@ -142,6 +152,81 @@ class CaptureReplay(unittest.TestCase):
         self.feed(damaged + rx(0x03, 0xe0, "01 02 00 02 02 00"))
         self.assertEqual(self.lines[-1]["ancLevel"], "mid")
         self.assertEqual(len(self.lines), count + 1)
+
+
+class CmfBuds2CaptureReplay(unittest.TestCase):
+    def setUp(self):
+        self.lines = []
+        self.emit = patch.object(bridge, "emit", self.lines.append)
+        self.emit.start()
+        self.addCleanup(self.emit.stop)
+        with patch.object(bridge, "read_case_cache", return_value=None):
+            self.device = bridge.Bridge("3C:B0:ED:D0:AC:0B", "CMF Buds 2")
+        self.device.sock = Socket()
+
+    def feed(self, raw):
+        self.device.buffer += raw
+        for frame in bridge.take_frames(self.device.buffer):
+            self.device.on_frame(*frame)
+
+    def test_every_unredacted_buds2_frame_has_valid_framing(self):
+        self.assertEqual(len(BUDS2_ROWS), 62)
+        for number, _, raw in BUDS2_ROWS:
+            with self.subTest(line=number):
+                buffer = bytearray(raw)
+                self.assertEqual(len(bridge.take_frames(buffer)), 1)
+                self.assertEqual(buffer, b"")
+
+    def test_buds2_controls_and_case_battery(self):
+        self.feed(rx_buds2(0x1e, 0x40, "01 05 00 02 01 00"))
+        self.feed(rx_buds2(0x07, 0x40, "02 02 64 03 64"))
+        self.feed(rx_buds2(0x41, 0x40, "02"))
+        self.assertEqual(self.lines[-1]["mode"], "off")
+        self.assertEqual(self.lines[-1]["ancLevel"], "high")
+        self.assertEqual(self.lines[-1]["battery"]["left"], 100)
+        self.assertEqual(self.lines[-1]["battery"]["right"], 100)
+        self.assertNotIn("case", self.lines[-1]["battery"])
+
+        # Case battery event when case is opened
+        self.feed(rx_buds2(0x01, 0xe0, "03 02 64 03 64 04 55"))
+        self.assertEqual(self.lines[-1]["battery"]["case"], 85)
+        self.assertFalse(self.lines[-1]["battery"]["caseStale"])
+
+        # Case closed subsequent query preserves case level with caseStale
+        self.feed(rx_buds2(0x07, 0x40, "02 02 64 03 64"))
+        self.assertEqual(self.lines[-1]["battery"]["case"], 85)
+        self.assertTrue(self.lines[-1]["battery"]["caseStale"])
+
+        cases = [
+            ("set ambient", "01 07 00", "01 07 00 02 01 00", "ambient", "high"),
+            ("set anc", "01 01 00", "01 01 00 02 01 00", "anc", "high"),
+            ("level adaptive", "01 04 00", "01 04 00 02 04 00", "anc", "adaptive"),
+            ("level low", "01 03 00", "01 03 00 02 03 00", "anc", "low"),
+            ("level mid", "01 02 00", "01 02 00 02 02 00", "anc", "mid"),
+            ("level high", "01 01 00", "01 01 00 02 01 00", "anc", "high"),
+            ("set off", "01 05 00", "01 05 00 02 01 00", "off", "high"),
+            ("latency on", "01", "01", "off", "high"),
+            ("latency off", "02", "02", "off", "high"),
+        ]
+        for command, outgoing, answer, mode, level in cases:
+            with self.subTest(command=command):
+                latency = command.startswith("latency")
+                cmd = 0x40 if latency else 0x0f
+                before = len(self.lines)
+                self.device.command(command)
+                sent = self.device.sock.sent[-1]
+                self.assertIn(sent, [raw for _, flow, raw in BUDS2_ROWS if flow == "->"])
+                self.assertEqual(sent[3:5], bytes((cmd, 0xf0)))
+                self.assertEqual(sent[8:-2], bytes.fromhex(outgoing))
+                self.feed(rx_buds2(cmd, 0x70, "00" if not latency else "01" if command.endswith("on") else "02"))
+                self.assertEqual(len(self.lines), before)
+                self.assertIsNotNone(self.device.readback_at)
+                self.device.readback()
+                self.feed(rx_buds2(0x41 if latency else 0x1e, 0x40, answer))
+                self.assertEqual(self.lines[-1]["mode"], mode)
+                self.assertEqual(self.lines[-1]["ancLevel"], level)
+                if latency:
+                    self.assertEqual(self.lines[-1]["latency"], command.endswith("on"))
 
 
 class ChannelRegression(unittest.TestCase):
