@@ -75,7 +75,7 @@ class Client:
         self.pending.add(field)
         self.process.stdin.write(command + "\n")
         self.process.stdin.flush()
-        state = self.wait(lambda state: state.get("values", {}).get(field) == value, after=serial)
+        state = self.wait(lambda state: field in state.get("observed", []) and state.get("values", {}).get(field) == value, after=serial)
         self.pending.discard(field)
         return state
 

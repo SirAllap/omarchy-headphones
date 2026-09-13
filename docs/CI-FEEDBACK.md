@@ -18,7 +18,7 @@ the repository check; check a draft explicitly by id while developing it.
 
 | Check | What fails | Author action |
 |:--|:--|:--|
-| Command round trips | A declared control value has no accepted command, subsequent wire write and explicit RX observation of that value | Record requests one at a time and wait for replies. Fix command encoding/readback; an initial or cached value is insufficient. |
+| Command round trips | A declared control value has no accepted command, subsequent wire write and explicit fresh RX observation of that control value | Record requests one at a time and wait for replies. Fix command encoding/readback; an initial or cached value is insufficient. |
 | Coalesced delivery | Combining causally adjacent stream RX changes writes, reports or exit status | Keep incomplete input in a buffer; consume all complete frames in each received() call. |
 | Session isolation | Interleaved instances diverge, or fresh instances differ from an independent replay | Move mutable counters, buffers and pending requests into each instance; remove nondeterministic output. |
 | Owner evidence preservation | An existing device package, pin or raw capture was edited/deleted relative to the baseline | Restore the named original evidence; contribute new evidence separately. |

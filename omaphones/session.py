@@ -4,7 +4,7 @@ from omaphones.state import State
 
 
 class Session:
-    def __init__(self, adapter, transport, clock, output, ended=lambda code, message: None, limits=None, recorder=None):
+    def __init__(self, adapter, transport, clock, output, ended=lambda code, message: None, limits=None, recorder=None, observer=None):
         self.adapter = adapter
         self.transport = transport
         self.clock = clock
@@ -12,6 +12,7 @@ class Session:
         self.ended = ended
         self.state = State(limits)
         self.recorder = recorder
+        self.observer = observer
         self.exit_code = None
         self.message = ""
         self.timers = {}
@@ -46,9 +47,12 @@ class Session:
                 elif isinstance(effect, Report):
                     if event.kind == 'command':
                         raise ValueError('a command cannot report device state before RX')
-                    if self.state.apply(effect):
-                        if self.recorder:
-                            self.recorder.record('state', self.state.snapshot())
+                    changed = self.state.apply(effect)
+                    if changed and self.recorder:
+                        self.recorder.record('state', self.state.snapshot())
+                    if self.observer:
+                        self.observer(self.state, self.state.observed if event.kind == 'received' else [], changed)
+                    elif changed:
                         self.output(self.state)
                 elif isinstance(effect, Finish):
                     self.finish(effect.code, effect.message)
@@ -61,11 +65,17 @@ class Session:
         if self.exit_code is not None:
             return
         self.exit_code, self.message = code, message
-        for token in self.timers.values():
-            self.clock.cancel(token)
-        self.timers.clear()
-        self.adapter.on_event(Event("stop"))
         try:
-            self.transport.close()
+            for token in self.timers.values():
+                self.clock.cancel(token)
+            self.timers.clear()
+            self.adapter.on_event(Event("stop"))
+        except Exception as error:
+            if self.exit_code == 0:
+                self.exit_code = 1
+            self.message = (self.message + '; ' if self.message else '') + 'adapter cleanup: ' + str(error)
         finally:
-            self.ended(code, message)
+            try:
+                self.transport.close()
+            finally:
+                self.ended(self.exit_code, self.message)

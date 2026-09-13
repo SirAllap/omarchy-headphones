@@ -107,19 +107,19 @@ class Adapter(Protocol):
                 level = parse_battery(payload)
                 if level is not None:
                     self.battery = level
-                    self.publish()
+                    self.publish(('battery',))
             elif (block, function, op) == (31, 3, OP_STATUS) and len(payload) == 1 and payload[0] in MODE_BY_IDX:
                 self.mode = MODE_BY_IDX[payload[0]]
-                self.publish()
+                self.publish(('noise.mode',))
 
-    def publish(self):
+    def publish(self, observed):
         if self.mode is None:
             return
         values, caps = {'noise.mode': self.mode}, {'noise.mode': {'values': AVAILABLE}}
         if self.battery is not None:
             values['battery'] = {'headset': self.battery, 'charging': []}
             caps['battery'] = {'readOnly': True}
-        self.report(values, caps)
+        self.report(values, caps, observed=observed)
 
     def command(self, control, value):
         if self.mode is not None and control == 'noise.mode' and value in AVAILABLE:

@@ -91,7 +91,7 @@ class Adapter(Protocol):
 | `write(bytes)` | Send bytes, buffering partial writes |
 | `schedule(ms, "method", *args)` | Run a one-shot timer and return its token |
 | `cancel_timer(token)` | Cancel that timer |
-| `report(values, capabilities)` | Validate, limit, merge and deduplicate observations |
+| `report(values, capabilities, observed=None)` | Validate, limit, merge and deduplicate observations; identify fields read by this reply |
 | `next_endpoint()` | Close the current RFCOMM candidate and try the next declared channel |
 | `finish(code, message)` | Stop once, cancel timers and close resources |
 
@@ -133,6 +133,15 @@ cannot publish state. Soundcore's new codec keeps level/wind parameters as
 observations until RX; Nothing's new codec exposes ANC strength only after an
 observed strength and keeps stale case level only within the current session.
 Those differences do not change either original bridge or its owner's pins.
+
+A report that includes cached fields must pass `observed` containing only the
+keys parsed from this reply. Omit it only when every value in the report is a
+fresh observation. For example, a full snapshot triggered by a battery reply
+uses `observed=("battery",)`, even if its values also contain the cached mode.
+The capture/live host emits these field names in `observed`, including repeated
+RX observations whose values did not change. The live checker confirms a write
+only from a fresh observation of that control; an unrelated snapshot cannot
+confirm restoration. Non-RX reports never carry fresh observation markers.
 
 The host emits `apiVersion`, `values`, `capabilities` and a legacy projection for
 existing panel/IPC consumers. It accepts one JSON command per stdin line:
@@ -192,14 +201,16 @@ these against the actual replies and protocol notes, then label coverage cases.
 `feed` references a captured RX, command, timer or lifecycle event id; `sent`
 references all captured TX ids so far; `expect` is the complete versioned
 snapshot, optionally carrying a `case`. Replay preserves every input in order
-and checks exact transmitted bytes. Stream replay additionally splits each RX
+and checks exact transmitted bytes. GATT assertions preserve individual write
+payload boundaries; stream assertions allow partial writes. Stream replay additionally splits each RX
 at every possible boundary. Empty captures, wrong identity, missing TX, skipped
 inputs and self-declared legacy exemptions fail.
 
 Required cases include initial state, each writable enum/boolean value and
 numeric endpoint, external change, repeated state, unsupported command, and
 observed bridge battery/wear readings when declared. A response to a pending
-command cannot be labelled external change. Synthetic damage belongs in
+command cannot be labelled external change, nor can the first report: a writable
+control must have a previously observed value and then change. Synthetic damage belongs in
 `test_adapter.py`, separately from the raw capture. Required fault scenarios
 cover silence, disconnect, invalid frame, coalesced input, repeated input and
 unsupported commands. Test names alone do not prove coverage: review the tests.

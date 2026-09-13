@@ -132,10 +132,12 @@ Panel {
   readonly property bool ambientVoice: current ? current.ambientVoice : false
   readonly property bool ambientToggleAvailable: current ? current.ambientToggleAvailable : false
   readonly property bool ambientControls: current ? current.ambientControls : false
+  readonly property bool ambientLevelAvailable: current ? current.ambientLevelAvailable : false
   // The dial's range and the switch's name, which differ by brand (Sony 0-20
   // and Focus on voice; Soundcore 1-5 and Wind noise reduction).
   readonly property int ambientMin: current ? current.ambientMin : 0
   readonly property int ambientMax: current ? current.ambientMax : 20
+  readonly property int ambientStep: current ? current.ambientStep : 1
   readonly property string ambientVoiceLabel: current ? current.ambientVoiceLabel : "Focus on voice"
   // ANC strength, Nothing only: which strengths the device grades its noise
   // cancelling in, and the one it is at (or was last at).
@@ -238,7 +240,7 @@ Panel {
     // would be offering keys that do nothing. Same for the strengths and the
     // latency switch.
     if (ambientRowVisible) {
-      parts.push("[ ] Level")
+      if (ambientLevelAvailable) parts.push("[ ] Level")
       if (ambientToggleAvailable) parts.push(ambientVoiceLabel === "Focus on voice" ? "f Voice" : "f Wind")
     }
     for (var j = 0; j < ancLevelOptions.length; j++)
@@ -367,23 +369,25 @@ Panel {
   // arguing with reports that are already out of date. Nothing is dropped — the
   // last value asked for is the one that goes out.
   function setAmbientLevel(value) {
-    if (!current) return false
-    pendingAmbientLevel = Model.clamp(value, ambientMin, ambientMax)
+    if (!current || !ambientLevelAvailable) return false
+    var level = Model.quantizeControl(value, ambientMin, ambientMax, ambientStep)
+    if (!isFinite(level)) return false
+    pendingAmbientLevel = level
     askedAmbientLevel = pendingAmbientLevel
     ambientWrite.restart()
     return true
   }
 
   function stepAmbientLevel(delta) {
-    if (!ambientRowVisible) return false
+    if (!ambientRowVisible || !ambientLevelAvailable) return false
     var from = askedAmbientLevel >= 0 ? askedAmbientLevel : ambientLevel
-    return setAmbientLevel(from + delta)
+    return setAmbientLevel(from + delta * ambientStep)
   }
 
   // Asked for, not set optimistically: the switch follows the headset the same
   // way the mode buttons do, and moves when it reports.
   function toggleAmbientVoice() {
-    if (!ambientRowVisible || !current) return false
+    if (!ambientRowVisible || !ambientToggleAvailable || !current) return false
     return current.setAmbientVoice(!ambientVoice)
   }
 
@@ -783,7 +787,8 @@ Panel {
 
             Item {
               width: parent.width
-              implicitHeight: Math.max(ambientLabel.implicitHeight, ambientValue.implicitHeight)
+              visible: root.ambientLevelAvailable
+              implicitHeight: visible ? Math.max(ambientLabel.implicitHeight, ambientValue.implicitHeight) : 0
 
               Text {
                 id: ambientLabel
@@ -811,11 +816,12 @@ Panel {
 
             PanelSlider {
               id: ambientSlider
+              visible: root.ambientLevelAvailable
               bar: root.bar
               width: parent.width
               minimum: root.ambientMin
               maximum: root.ambientMax
-              step: 1
+              step: root.ambientStep
               integer: true
               // What the headset last said, or the figure asked for while it
               // catches up. Turning the dial on the headset moves this one too,

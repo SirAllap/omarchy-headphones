@@ -1107,3 +1107,31 @@ Deno.test("device packages match exact identity and preserve BLE lifecycle routi
     assertEquals(JSON.parse(args[3]), context);
   } finally { Model.BACKENDS.shift(); }
 });
+
+Deno.test("ambient input follows its declared grid including offset and upper bound", () => {
+  assertEquals(Model.quantizeControl(1, 0, 10, 2), 2);
+  assertEquals(Model.quantizeControl(9, 2, 9, 3), 8);
+  assertEquals(Model.quantizeControl(-100, 2, 9, 3), 2);
+  assertEquals(Number.isNaN(Model.quantizeControl(NaN, 0, 10, 2)), true);
+  const row = {name: "review-grid", runtime: true};
+  Model.BACKENDS.unshift(row);
+  try {
+    const state = {apiVersion: 1, values: {"ambient.level": 2}, capabilities: {"ambient.level": {min: 2, max: 9, step: 3}}};
+    for (const delta of [-1, 1]) {
+      const value = Model.quantizeControl(5 + delta * 3, 2, 9, 3);
+      assertEquals(JSON.parse(Model.controlCommand(row.name, state, "ambient.level", value)).value, delta === -1 ? 2 : 8);
+    }
+  } finally { Model.BACKENDS.shift(); }
+});
+
+Deno.test("ambient toggle and slider availability are independent", () => {
+  const snapshot = (values, capabilities) => ({apiVersion: 1, values, capabilities});
+  for (const key of ["noise.wind_reduction", "ambient.focus_on_voice"]) {
+    const state = snapshot({[key]: false}, {[key]: {type: "boolean"}});
+    assertEquals(Model.ambientControlState("unused", state, true), {level: false, toggle: key, visible: true});
+    assertEquals(Model.ambientControlState("unused", state, false), {level: false, toggle: "", visible: false});
+  }
+  const caps = {"ambient.level": {min: 0, max: 10, step: 2}};
+  assertEquals(Model.ambientControlState("unused", snapshot({"ambient.level": 2}, caps), true), {level: true, toggle: "", visible: true});
+  assertEquals(Model.ambientControlState("unused", snapshot({}, caps), true).visible, false);
+});

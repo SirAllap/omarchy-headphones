@@ -143,7 +143,12 @@ def execute(profile, directory, events, spec, root=ROOT, split=None):
                 refs = step['sent']
                 if not isinstance(refs, list) or len(refs) != len(set(refs)) or any(events[r]['direction'] != 'tx' for r in refs):
                     raise ValueError('sent assertions must reference captured TX')
-                testcase.assertEqual(b''.join(bytes.fromhex(s) for s in replay.sent), b''.join(bytes.fromhex(events[r]['data']) for r in refs))
+                actual = [bytes.fromhex(s) for s in replay.sent]
+                expected = [bytes.fromhex(events[r]['data']) for r in refs]
+                if next(iter(events.values()))['data']['boundary'] == 'stream':
+                    testcase.assertEqual(b''.join(actual), b''.join(expected))
+                else:
+                    testcase.assertEqual(actual, expected, 'GATT payload boundaries differ')
                 asserted_tx = refs
             elif 'expect' in step:
                 expected = step['expect']
@@ -159,6 +164,10 @@ def execute(profile, directory, events, spec, root=ROOT, split=None):
                             raise ValueError('case needs actual device input')
                         if label == 'external-change' and input_had_pending:
                             raise ValueError('external-change cannot be a pending command response')
+                        if label == 'external-change' and not any(
+                                key in expected['values'] and before_values[key] != expected['values'][key]
+                                for key in before_values if key in profile['capabilities'] and not profile['capabilities'][key].get('readOnly')):
+                            raise ValueError('external-change needs a previously observed control value followed by a change')
                         equal = before_values == expected['values']
                         if equal != (label == 'repeated'):
                             raise ValueError('case contradicts observed change/repetition')

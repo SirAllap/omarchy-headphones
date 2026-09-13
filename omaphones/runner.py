@@ -110,12 +110,15 @@ def main(argv=None):
             emit({"modes": False, "error": str(error)})
             return 4
     remembered = False
-    def output(state):
+    def output(state, observed=None):
         nonlocal remembered
         if not remembered and "noise.mode" in state.values and row.get("supportCache"):
             cache.remember(context.get("modelId", ""), True)
             remembered = True
-        emit({**state.legacy(), **state.snapshot()})
+        emit({**state.legacy(), **state.snapshot(), **({"observed": observed} if observed is not None else {})})
+    def observe(state, fields, changed):
+        if fields or changed:
+            output(state, fields)
     def ended(code, message):
         if code == 3 and not remembered and row.get("supportCache"):
             cache.remember(context.get("modelId", ""), False)
@@ -127,7 +130,7 @@ def main(argv=None):
     limits = dict(profile["capabilities"]) if profile else None
     if profile and profile.get("batterySource") != "bridge":
         limits.pop("battery", None)
-    session = Session(protocol, transport, GLibClock(GLib), output, ended, limits=limits, recorder=recorder)
+    session = Session(protocol, transport, GLibClock(GLib), output, ended, limits=limits, recorder=recorder, observer=observe if recorder else None)
     transport.deliver = session.dispatch
     pending = ""
     def stdin_ready(fd, condition):

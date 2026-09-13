@@ -18,7 +18,7 @@ class Audit(Protocol):
 
     def on_event(self, event):
         effects = self.adapter.on_event(event)
-        self.observations = [effect.values for effect in effects if isinstance(effect, Report)] if event.kind == 'received' else []
+        self.observations = [{key: value for key, value in effect.values.items() if effect.observed is None or key in effect.observed} for effect in effects if isinstance(effect, Report)] if event.kind == 'received' else []
         return effects
 
 

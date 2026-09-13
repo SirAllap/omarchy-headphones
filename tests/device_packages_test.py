@@ -320,6 +320,7 @@ class Packages(unittest.TestCase):
         events = evidence.capture(path, self.profile)
         self.assertEqual([e['data'] for e in events.values() if e['direction'] == 'tx'], [b'query\n'.hex(' '), b'anc\n'.hex(' ')])
         self.assertEqual(outputs[-1]['values'], {'noise.mode': 'off'})
+        self.assertEqual(outputs[-1]['observed'], ['noise.mode'])
         self.assertEqual(next(iter(events.values()))['data']['implementation'], digest)
 
     def test_session_scaffolder_keeps_inputs_and_leaves_expectations_unapproved(self):

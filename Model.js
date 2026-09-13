@@ -1035,3 +1035,32 @@ function controlCommand(backend, state, key, value) {
   var legacy = row.controls[key]
   return legacy.command + " " + (typeof value === "boolean" ? (value ? "on" : "off") : str(value)) + "\n"
 }
+
+// A device's declared numeric grid applies to pointer, keyboard and IPC input.
+function quantizeControl(value, minimum, maximum, step) {
+  value = Number(value)
+  if (!isFinite(value) || !isFinite(minimum) || !isFinite(maximum)
+      || !isFinite(step) || step <= 0 || maximum < minimum) return NaN
+  var last = Math.floor((maximum - minimum) / step)
+  var index = Math.max(0, Math.min(last, Math.round((value - minimum) / step)))
+  return minimum + index * step
+}
+
+function ambientControlState(backend, state, live) {
+  var caps = controlCapabilities(backend, state)
+  var level = caps["ambient.level"]
+  var value = controlValue(backend, state, "ambient.level")
+  var toggle = ""
+  var keys = ["ambient.focus_on_voice", "noise.wind_reduction"]
+  if (live) {
+    for (var i = 0; i < keys.length; i++) {
+      var spec = caps[keys[i]]
+      if (spec && !spec.readOnly && typeof controlValue(backend, state, keys[i]) === "boolean") {
+        toggle = keys[i]
+        break
+      }
+    }
+  }
+  var hasLevel = !!live && !!level && !level.readOnly && typeof value === "number" && isFinite(value)
+  return { level: hasLevel, toggle: toggle, visible: hasLevel || toggle !== "" }
+}

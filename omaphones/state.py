@@ -56,8 +56,12 @@ class State:
         self.values = {}
         self.capabilities = {}
         self.limits = deepcopy(limits)
+        self.observed = []
 
     def apply(self, report):
+        observed = list(report.values) if report.observed is None else list(report.observed)
+        if any(key not in report.values for key in observed):
+            raise ValueError('observed fields must be present in this report')
         if self.limits is not None:
             from omaphones.api import Report
             limited = {}
@@ -97,6 +101,7 @@ class State:
             raise ValueError("capability update invalidates observed state")
         changed = values != self.values or caps != self.capabilities
         self.values, self.capabilities = values, caps
+        self.observed = [key for key in observed if key in report.values]
         return changed
 
     def accepts(self, control, value):

@@ -188,7 +188,7 @@ class Adapter(Protocol):
                     self.mode = mode
                     if level is not None:
                         self.level = level
-                    self.publish()
+                    self.publish(('noise.mode', 'anc.strength') if level is not None else ('noise.mode',))
             elif command in (CMD_BATTERY, 0x01) and direction != DIR_ACK:
                 levels, charging = parse_battery(payload)
                 if levels:
@@ -198,14 +198,14 @@ class Adapter(Protocol):
                         self.battery['caseStale'] = False
                     elif self.case_level is not None:
                         self.battery.update(case=self.case_level, caseStale=True)
-                    self.publish()
+                    self.publish(('battery',))
             elif command == CMD_LATENCY_GET and direction == DIR_ANSWER and payload and payload[0] in (1, 2):
                 self.latency = payload[0] == 1
-                self.publish()
+                self.publish(('audio.low_latency',))
             elif command in (CMD_ANC_SET, CMD_LATENCY_SET):
                 self.schedule_readback(400)
 
-    def publish(self):
+    def publish(self, observed):
         if self.mode is None:
             return
         values, caps = {'noise.mode': self.mode}, {'noise.mode': {'values': AVAILABLE}}
@@ -218,7 +218,7 @@ class Adapter(Protocol):
         if self.battery:
             values['battery'] = self.battery
             caps['battery'] = {'readOnly': True}
-        self.report(values, caps)
+        self.report(values, caps, observed=observed)
 
     def command(self, control, value):
         if self.mode is None:

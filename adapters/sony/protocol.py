@@ -239,7 +239,7 @@ class Adapter(Protocol):
         self.buffer += data
         self.parse_buffer()
 
-    def push_line(self, first):
+    def push_line(self, first, observed=("noise.mode", "ambient.level", "ambient.focus_on_voice")):
         values = {"noise.mode": self.mode, "ambient.level": self.level,
                   "ambient.focus_on_voice": self.voice}
         capabilities = {
@@ -250,7 +250,7 @@ class Adapter(Protocol):
         if self.worn is not None:
             values["wear.detected"] = self.worn
             capabilities["wear.detected"] = {"type": "boolean", "readOnly": True}
-        self.report(values, capabilities)
+        self.report(values, capabilities, observed=observed)
 
     def command(self, control, value):
         if self.inquired is None:
@@ -438,7 +438,7 @@ class Adapter(Protocol):
         """
         self.worn = worn
         if self.inquired is not None:
-            self.push_line(False)
+            self.push_line(False, observed=("wear.detected",))
 
 
     def set_frame(self, mode, level, voice):

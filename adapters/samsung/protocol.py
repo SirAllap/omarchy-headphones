@@ -123,19 +123,19 @@ class Adapter(Protocol):
             state = parse_state(payload)
             if state:
                 self.state = state
-                self.publish()
+                self.publish(('noise.mode', 'battery') if state.get('battery') else ('noise.mode',))
         elif message == NOISE_CONTROLS_UPDATE and payload and payload[0] in MODE_FROM_BYTE:
             self.state = dict(self.state or {})
             self.state['mode'] = MODE_FROM_BYTE[payload[0]]
-            self.publish()
+            self.publish(('noise.mode',))
 
-    def publish(self):
+    def publish(self, observed):
         values = {'noise.mode': self.state['mode']}
         caps = {'noise.mode': {'values': AVAILABLE}}
         if self.state.get('battery'):
             values['battery'] = self.state['battery']
             caps['battery'] = {'readOnly': True}
-        self.report(values, caps)
+        self.report(values, caps, observed=observed)
 
     def command(self, control, value):
         if self.state and control == 'noise.mode' and value in MODE_TO_BYTE:

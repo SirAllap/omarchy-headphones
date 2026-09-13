@@ -148,14 +148,14 @@ class Adapter(Protocol):
             self.ask_mode()
         self.schedule(3000, 'poll')
 
-    def publish(self):
+    def publish(self, observed):
         if self.mode is None:
             return
         values, caps = {'noise.mode': self.mode}, {'noise.mode': {'values': AVAILABLE}}
         if self.battery:
             values['battery'] = self.battery
             caps['battery'] = {'readOnly': True}
-        self.report(values, caps)
+        self.report(values, caps, observed=observed)
 
     def received(self, data):
         self.buffer.extend(data)
@@ -166,7 +166,7 @@ class Adapter(Protocol):
                 if mode:
                     first = self.mode is None
                     self.mode = mode
-                    self.publish()
+                    self.publish(('noise.mode',))
                     if first:
                         self.ask_battery()
                         self.schedule(3000, 'poll')
@@ -174,7 +174,7 @@ class Adapter(Protocol):
                 levels, charging = battery_of(payload)
                 if levels is not None:
                     self.battery = {**levels, 'charging': charging or []}
-                    self.publish()
+                    self.publish(('battery',))
             elif command == ACK_ANC:
                 self.ask_mode()
 

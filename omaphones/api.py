@@ -30,6 +30,7 @@ class CancelTimer:
 class Report:
     values: dict
     capabilities: dict = field(default_factory=dict)
+    observed: tuple | None = None
 
 
 @dataclass(frozen=True)
@@ -103,9 +104,9 @@ class Protocol:
             self._timers.pop(token)
             self.effects.append(CancelTimer(token))
 
-    def report(self, values, capabilities=None):
+    def report(self, values, capabilities=None, observed=None):
         if self.exit_code is None:
-            self.effects.append(Report(values, capabilities or {}))
+            self.effects.append(Report(values, capabilities or {}, None if observed is None else tuple(observed)))
 
     def finish(self, code, message=""):
         if self.exit_code is None:

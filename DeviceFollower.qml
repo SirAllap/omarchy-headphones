@@ -238,14 +238,13 @@ Item {
   // Ambient detail, Sony only: how much of the room comes through (0-20) and
   // whether voices are lifted out of it. -1 and false mean "not said".
   readonly property int ambientLevel: typeof ancState.level === "number" ? ancState.level : -1
-  readonly property bool ambientVoice: ancState.voice === true
-  // Whether this device has the two Ambient extras at all, which is decided by
-  // the bridge that answered rather than by a name: only the Sony one reports a
-  // level, and a JBL pair's Ambient Aware is a mode with no amount to it. The
-  // panel draws the dial and the voice switch on this, and nothing on a device
-  // that never mentioned either.
-  readonly property bool ambientControls: ancLive && !!capabilities["ambient.level"] && ambientLevel >= 0
-  readonly property bool ambientToggleAvailable: ancLive && ambientToggle !== ""
+  readonly property bool ambientVoice: Model.controlValue(controlBackend, ancState, ambientToggle) === true
+  // Level and filter are independent capabilities. A device may expose either
+  // control on its own; show only the controls with observed values.
+  readonly property var ambientUi: Model.ambientControlState(controlBackend, ancState, ancLive)
+  readonly property bool ambientLevelAvailable: ambientUi.level
+  readonly property bool ambientControls: ambientUi.visible
+  readonly property bool ambientToggleAvailable: ambientUi.toggle !== ""
 
   // On the ears or not, from a wear sensor — confirmed on the Sony WH-1000XM6,
   // over the same SYSTEM status channel as the listening mode. Undefined until
@@ -296,6 +295,7 @@ Item {
   readonly property var ambientRange: capabilities["ambient.level"] || { min: 0, max: 0 }
   readonly property int ambientMin: ambientRange.min
   readonly property int ambientMax: ambientRange.max
+  readonly property int ambientStep: ambientRange.step || 1
   readonly property string ambientVoiceLabel: ambientToggle === "noise.wind_reduction" ? "Wind noise reduction" : "Focus on voice"
 
   readonly property int bluezLevel: packageBatterySource === "none" ? -1 : Model.batteryLevel(device)
@@ -481,8 +481,7 @@ Item {
   // Capabilities select the command and range. Protocol spellings belong to
   // the adapter or its legacy metadata, never to this follower.
   readonly property var capabilities: Model.controlCapabilities(controlBackend, ancState)
-  readonly property string ambientToggle: capabilities["ambient.focus_on_voice"]
-    ? "ambient.focus_on_voice" : (capabilities["noise.wind_reduction"] ? "noise.wind_reduction" : "")
+  readonly property string ambientToggle: ambientUi.toggle
 
   function sendControl(key, value) {
     if (!ancLive) return false
@@ -497,9 +496,10 @@ Item {
   function setAncMode(mode) { return sendControl("noise.mode", String(mode)) }
 
   function setAmbientLevel(value) {
-    var level = Number(value)
+    if (!ambientLevelAvailable) return false
+    var level = Model.quantizeControl(value, ambientMin, ambientMax, ambientStep)
     if (!isFinite(level)) return false
-    return sendControl("ambient.level", Math.max(ambientMin, Math.min(ambientMax, Math.round(level))))
+    return sendControl("ambient.level", level)
   }
 
   function setAmbientVoice(on) { return sendControl(ambientToggle, on) }
