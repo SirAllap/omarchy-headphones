@@ -3,7 +3,7 @@
   "owner": "enobale",
   "bridge": "sony-bridge",
   "capture": "docs/captures/sony-wh-ch520.txt",
-  "notes": "MDR v2 on 0x17. wear:False because f2 10 was sent to it during probing and never answered (docs/captures/sony-wh-ch520.txt, run 1), not because a sensor was confirmed absent. Live hardware never answered a SET with a state change across four separate real connections: off, ambient and a same-state anc write were all ACKed and left the reported state untouched, so this pin's SET steps are ACKed too and assert no new line is emitted, matching what the bridge's own comment says a RET/NTFY-less SET does. Whether the headset's own button can still move the reported mode (and would show up as an NTFY) was not tested: this contribution has no way to press it.",
+  "notes": "Sony's own listing shows no ANC/Ambient on this model, so it is in sony-bridge's NO_MODES rather than MODELS: the bridge asks it nothing at all — not 0x17, not f2 10 — and exits EXIT_UNSUPPORTED right after the handshake, the same 'linked but silent' path the shell already parks without an error banner. This is despite the headset answering NCASM GET 0x17 with a plausible-looking block when asked directly (docs/captures/sony-wh-ch520.txt, run 1): a SET built on that block was ACKed and never once reflected back across four separate live connections, so the reply is not treated as a real control surface. Battery, over Fast Pair, is unaffected and confirmed separately (docs/captures/sony-wh-ch520-fastpair.txt, docs/captures/sony-wh-ch520-live.json).",
   "session": {
     "uuid": "v2",
     "name": "WH-CH520"
@@ -13,86 +13,17 @@
       "device": "01 00 03 00 10 01 00 00"
     },
     {
-      "ack": true
-    },
-    {
-      "sent": [
-        "66 17"
-      ],
-      "note": "no f2 10 here: WH-CH520 has its own MODELS row with wear:False"
-    },
-    {
-      "device": "67 17 01 01 00 00 01"
+      "sent": []
     },
     {
       "line": {
-        "modes": true,
-        "mode": "anc",
-        "available": [
-          "off",
-          "anc",
-          "ambient"
-        ],
-        "level": 1,
-        "voice": false
-      }
+        "modes": false,
+        "error": "no ANC/Ambient on this model (confirmed on hardware; see PROTOCOL.md)"
+      },
+      "note": "the shell discards this line for exit 3 (DeviceFollower.qml clears ancRunError there) rather than showing it, but the bridge still writes it"
     },
     {
-      "line_count": 1
-    },
-    {
-      "command": "set off"
-    },
-    {
-      "sent_last": "68 17 01 00 00 00 01"
-    },
-    {
-      "ack": true
-    },
-    {
-      "line_count": 1,
-      "note": "no RET/NTFY ever followed this SET on the real headset (docs/captures/sony-wh-ch520.txt, run 2); the bridge does not invent a line for it"
-    },
-    {
-      "command": "set ambient"
-    },
-    {
-      "sent_last": "68 17 01 01 01 00 01"
-    },
-    {
-      "ack": true
-    },
-    {
-      "line_count": 1,
-      "note": "same silence on the real headset (capture run 3), stored level 1 carried through unchanged"
-    },
-    {
-      "command": "level 10"
-    },
-    {
-      "sent_last": "68 17 01 01 01 00 0a"
-    },
-    {
-      "ack": true
-    },
-    {
-      "line_count": 1
-    },
-    {
-      "command": "voice on"
-    },
-    {
-      "sent_last": "68 17 01 01 00 01 01",
-      "note": "voice is sent in the current reported mode (anc, since no RET/NTFY ever moved it to ambient) and the stored level (1, since the earlier 'level 10' was never confirmed either), not dragged into ambient or the requested level behind the user's back"
-    },
-    {
-      "ack": true
-    },
-    {
-      "line_count": 1
-    },
-    {
-      "exit": null
+      "exit": 3
     }
   ]
 }

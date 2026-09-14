@@ -152,12 +152,24 @@ MODELS = {
     "WH-1000XM5": {"wear": False},   # huynguyendinhquang
     "WH-1000XM4": {"wear": False},   # seth-reee, PR #6
     "WH-1000XM6": {"wear": True},    # f-iacono, PR #7 — answers f3 10 00
-    "WH-CH520": {"wear": False},     # enobale — f2 10 sent and never answered
 }
 UNKNOWN = {"wear": True}
 # No name at all is a caller written before this argument, and it gets exactly
 # what it used to: no question.
 NAMELESS = {"wear": False}
+
+# Reported names that answer the NCASM GET on 0x17 with a plausible-looking
+# block — on, off, ambient, a level — but where a SET was ACKed and never
+# once reflected back, on four separate live connections with a real device
+# (docs/captures/sony-wh-ch520.txt), and where Sony's own listing for the
+# model shows no ANC or Ambient hardware at all. This is not the "answers
+# nothing" case MODELS/UNKNOWN's wear question is about — it answers plenty —
+# so it is not a MODELS row: it is asked nothing at all, NCASM included,
+# rather than shown a mode row that cannot be trusted to do anything. Exit 3
+# is the shell's existing "linked but silent" path — parked, no error banner
+# — which is exactly right here even though this headset was not literally
+# silent about it. enobale, PR #15.
+NO_MODES = {"WH-CH520"}
 
 # The NC/ASM variants worth asking a headset about. An inquired type belongs to
 # one MDR generation and names one block layout, and the number is unique across
@@ -448,6 +460,8 @@ class Bridge:
         # decides the one question (wearing status) that not every model is
         # asked. The block layout is still whatever inquired type answers.
         self.model = MODELS.get(name, UNKNOWN) if name else NAMELESS
+        # A reported name in NO_MODES is asked nothing at all — see there.
+        self.no_modes = name in NO_MODES
         # Which of Sony's two RFCOMM services to register and connect. It says
         # nothing about the block layout — the answering inquired type does —
         # so a wrong guess here costs a connection, not a wrong frame.
@@ -743,6 +757,12 @@ class Bridge:
         if payload[0] == CONNECT_RET_PROTOCOL_INFO:
             if not self.protocol_seen:
                 self.protocol_seen = True
+                if self.no_modes:
+                    # See NO_MODES: this name answers NCASM, just not usefully,
+                    # so it is never asked — not 0x17, not the wear question.
+                    return self.finish(
+                        EXIT_UNSUPPORTED,
+                        "no ANC/Ambient on this model (confirmed on hardware; see PROTOCOL.md)")
                 self.order_candidates(len(payload))
                 self.probe(0)
                 # Wearing status is never volunteered at connect the way NCASM's

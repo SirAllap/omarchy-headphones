@@ -165,8 +165,36 @@ class WearQuestion(unittest.TestCase):
         self.assertEqual(s.sent, ["66 17"])
 
     def test_every_pinned_model_has_a_row(self):
+        # A NO_MODES name deliberately has no MODELS row — it is asked
+        # nothing at all, the wear question included — so it satisfies this
+        # a different way: named there instead.
         for _path, pin in harness.pins_for("sony-bridge"):
-            self.assertIn(pin["session"]["name"], bridge_module.MODELS, pin["model"])
+            name = pin["session"]["name"]
+            self.assertTrue(
+                name in bridge_module.MODELS or name in bridge_module.NO_MODES,
+                pin["model"])
+
+
+class NoModes(unittest.TestCase):
+    """NO_MODES names are asked nothing at all, and nobody else is affected."""
+
+    HANDSHAKE = "01 00 03 00 10 01 00 00"
+
+    def test_a_no_modes_name_is_asked_nothing_and_parked(self):
+        s = Session(name="WH-CH520")
+        s.device(self.HANDSHAKE)
+        self.assertEqual(s.sent, [])
+        self.assertEqual(s.bridge.exit_code, bridge_module.EXIT_UNSUPPORTED)
+
+    def test_a_models_row_name_is_unaffected(self):
+        s = Session(name="WH-CH720N")
+        s.device(self.HANDSHAKE)
+        s.ack()
+        self.assertEqual(s.sent, ["66 17"])
+        self.assertIsNone(s.bridge.exit_code)
+
+    def test_no_modes_and_models_never_share_a_name(self):
+        self.assertEqual(set(bridge_module.NO_MODES) & set(bridge_module.MODELS), set())
 
 
 class Silent(unittest.TestCase):
