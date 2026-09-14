@@ -1005,3 +1005,18 @@ Deno.test('canonical Sony and JBL SDP records select their own bridge', async ()
       : [ble, '71f20a']);
   }
 });
+
+Deno.test("CMF Buds 2 complete owner SDP selects Nothing and passes reported name", async () => {
+  const record = await Deno.readTextFile(new URL(
+    "../docs/captures/nothing-cmf-buds-2-bluetoothctl.txt", import.meta.url));
+  const ids = Model.uuidsFromBluetoothctl(record);
+  assertEquals(ids.length, 18);
+  for (const uuids of [ids, [...ids].reverse(), ids.map(id => id.toUpperCase())]) {
+    for (const ble of ["", "48:B4:41:00:00:01"]) {
+      assertEquals(Model.controlBackend(uuids, ble), "nothing");
+    }
+  }
+  assertEquals(Model.bridgeArgs("nothing", {
+    address: "3C:B0:ED:D0:AC:0B", name: "CMF Buds 2",
+  }), ["3C:B0:ED:D0:AC:0B", "CMF Buds 2"]);
+});

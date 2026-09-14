@@ -1,8 +1,8 @@
 """CMF capture replay and lifecycle regression, without touching owner pins.
 
 Incoming bytes come from the named capture, never the bridge's encoder.
-The redacted device-info frame cannot retain a valid original CRC, so it is
-excluded. The real loop's info timeout unlocks queries in lifecycle tests.
+Only the Headphone Pro redacted device-info frame is excluded; the complete
+Buds 2 device-info frame is replayed with its original CRC. The real loop's info timeout unlocks queries in lifecycle tests.
 Socket errors, clock progression and CRC damage are synthetic fault injection.
 """
 import collections
@@ -17,11 +17,11 @@ bridge = harness.load_bridge("nothing-bridge")
 CAPTURE = pathlib.Path(harness.ROOT) / "docs/captures/nothing-headphone-pro.txt"
 
 
-def captured(path=CAPTURE):
+def captured(path=CAPTURE, *, skip_device_info=True):
     rows = []
     for number, line in enumerate(path.read_text().splitlines(), 1):
         found = re.search(r"\b55(?: [0-9a-fA-F]{2})+", line)
-        if found and "device-info    answer" not in line:
+        if found and not (skip_device_info and "device-info    answer" in line):
             rows.append((number, "<-" if "<-" in line else "->",
                          bytes.fromhex(found.group())))
     return rows
@@ -29,7 +29,7 @@ def captured(path=CAPTURE):
 
 ROWS = captured()
 BUDS2_CAPTURE = pathlib.Path(harness.ROOT) / "docs/captures/nothing-cmf-buds-2.txt"
-BUDS2_ROWS = captured(BUDS2_CAPTURE)
+BUDS2_ROWS = captured(BUDS2_CAPTURE, skip_device_info=False)
 
 
 def rx_buds2(command, direction, payload):
@@ -170,12 +170,59 @@ class CmfBuds2CaptureReplay(unittest.TestCase):
             self.device.on_frame(*frame)
 
     def test_every_unredacted_buds2_frame_has_valid_framing(self):
-        self.assertEqual(len(BUDS2_ROWS), 62)
+        self.assertEqual(len(BUDS2_ROWS), 63)
         for number, _, raw in BUDS2_ROWS:
             with self.subTest(line=number):
                 buffer = bytearray(raw)
                 self.assertEqual(len(bridge.take_frames(buffer)), 1)
                 self.assertEqual(buffer, b"")
+
+    def test_full_info_reply_unlocks_exact_captured_queries(self):
+        self.device.send(bridge.CMD_DEVICE_INFO)
+        outgoing = [raw for _, flow, raw in BUDS2_ROWS if flow == "->"]
+        self.assertEqual(self.device.sock.sent, outgoing[:1])
+        info = next(raw for _, flow, raw in BUDS2_ROWS
+                    if flow == "<-" and raw[3:5] == bytes((0x06, 0x40)))
+        self.feed(info)
+        self.assertTrue(self.device.info_seen)
+        self.assertEqual(self.device.sock.sent, outgoing[:4])
+        self.assertEqual(self.lines, [])
+
+    def test_every_reply_survives_every_split_and_joined_stream(self):
+        replies = [raw for _, flow, raw in BUDS2_ROWS if flow == "<-"]
+        expected_stream = []
+        for raw in replies:
+            expected = bridge.take_frames(bytearray(raw))
+            expected_stream.extend(expected)
+            for cut in range(1, len(raw)):
+                with self.subTest(frame=raw.hex(), cut=cut):
+                    buffer = bytearray(raw[:cut])
+                    self.assertEqual(bridge.take_frames(buffer), [])
+                    buffer += raw[cut:]
+                    self.assertEqual(bridge.take_frames(buffer), expected)
+                    self.assertEqual(buffer, b"")
+        buffer = bytearray(b"".join(replies))
+        self.assertEqual(bridge.take_frames(buffer), expected_stream)
+        self.assertEqual(buffer, b"")
+
+    def test_unsolicited_state_deduplication_and_crc_recovery(self):
+        mode = rx_buds2(0x03, 0xe0, "01 07 00 02 01 00")
+        latency = next(raw for _, flow, raw in BUDS2_ROWS
+                       if flow == "<-" and raw[:5] == bytes.fromhex("55 20 01 41 40")
+                       and raw[8] == 1)
+        self.feed(mode + latency)
+        self.assertEqual(self.lines[-1]["mode"], "ambient")
+        self.assertTrue(self.lines[-1]["latency"])
+        count = len(self.lines)
+        self.feed(mode + latency)
+        self.assertEqual(len(self.lines), count)
+        damaged = bytearray(rx_buds2(0x03, 0xe0, "01 03 00 02 03 00"))
+        damaged[-1] ^= 0xff  # Synthetic CRC damage, not owner evidence.
+        self.feed(damaged)
+        self.assertEqual(len(self.lines), count)
+        self.feed(rx_buds2(0x03, 0xe0, "01 02 00 02 02 00"))
+        self.assertEqual(self.lines[-1]["ancLevel"], "mid")
+        self.assertEqual(len(self.lines), count + 1)
 
     def test_buds2_controls_and_case_battery(self):
         self.feed(rx_buds2(0x1e, 0x40, "01 05 00 02 01 00"))
