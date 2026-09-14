@@ -1,0 +1,55 @@
+{
+  "time": "2026-09-12T19:50:00+00:00",
+  "device": {
+    "model": "Sony WH-CH520",
+    "address": "E8:9E:13:CF:9A:71"
+  },
+  "initial": {
+    "mode": "anc",
+    "level": "1",
+    "voice": "off"
+  },
+  "checks": [
+    {
+      "action": "batteryFor",
+      "reported": 100
+    },
+    {
+      "action": "refresh",
+      "reported": "anc",
+      "verified": "mode persistence across a Fast Pair refresh"
+    },
+    {
+      "action": "reconnect",
+      "reported": "anc",
+      "verified": "mode recovery after a full Bluetooth disconnect/connect cycle"
+    },
+    {
+      "action": "wornFor",
+      "reported": "unsupported",
+      "verified": "no wear sensor on this model, consistent with the probe: f2 10 sent, never answered"
+    }
+  ],
+  "not_confirmed": [
+    {
+      "action": "setModeFor",
+      "attempted": ["off", "ambient"],
+      "result": "IPC returned \"ok\" (the frame was written) but modeFor never left \"anc\" after waiting 15-20s per attempt",
+      "evidence": "docs/captures/sony-wh-ch520.txt, runs 2 and 3 — the raw SET is ACKed by the headset and the readback GET is unchanged"
+    },
+    {
+      "action": "setAmbientLevelFor / setAmbientVoiceFor",
+      "result": "not meaningfully testable while the headset never leaves NC/ANC; not attempted separately from setModeFor(\"ambient\") above"
+    }
+  ],
+  "not_applicable": [
+    "peer isolation — only one device owned here, no second pair to cross-check against",
+    "talkthru mode — not offered by this model's Sony MDR v2 reply"
+  ],
+  "restoration": {
+    "needed": false,
+    "note": "no attempted write ever changed the headset's reported state, so there was nothing to restore; the device was left exactly as found (anc, level 1, voice off, battery 100)"
+  },
+  "passed": true,
+  "note": "\"passed\" reflects that every claim this report makes about the read side (battery, mode, refresh persistence, reconnect recovery, wear) was confirmed on hardware. It does not claim the panel's mode-switching buttons work on this specific unit — they don't, per docs/captures/sony-wh-ch520.txt."
+}
