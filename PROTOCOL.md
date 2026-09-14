@@ -794,11 +794,9 @@ no unsolicited `0x69` in between either:
 <-  67 17 01 01 00 00 01        unchanged
 ```
 
-This lines up with what Sony documents for the model — no NC/Ambient
-hardware at all — once you read the 0x17 reply as leftover firmware state
-rather than a live control surface: something in this SKU still answers the
-question, but flipping the answer does nothing, on four separate attempts,
-because there is nothing behind it to flip.
+The returned block is not evidence of a working ANC/Ambient control.
+The probe observed unchanged replies after writes; it does not establish
+why the firmware returns this block.
 
 The wear question gets the same non-answer, asked directly rather than
 inferred (`tools/sony_wear_probe.py`, a fourth standalone tool — none of the
@@ -825,7 +823,8 @@ panel shows battery with no mode row. Whether the headset's own physical
 button does anything this channel would ever see was not tested: nothing in
 this session can press it, and it would not change what Sony documents
 about the hardware regardless. `tests/pins/sony/wh-ch520.json` pins exactly
-the asked-nothing path.
+the asked-nothing path. See [the review evidence notes](docs/SONY-WH-CH520-REVIEW.md)
+for the battery source and the historical live report.
 
 What the bridge does with all this: `sonyUuidFor()` in `Model.js` picks which of
 the two UUIDs to hand it, and the bridge registers that one — that is all the
@@ -873,7 +872,7 @@ unchanged by this — while a model with no row is, on the chance it has a
 sensor; an unanswered question costs nothing, since `worn` is only ever set
 by a reply. The WH-CH520 is a third case, `NO_MODES` rather than a `MODELS`
 row: it is asked nothing on this channel at all, `f2 10` included — see its
-own section below.
+own section above.
 
 ## Xiaomi Buds 5 Pro — Compact GAIA on SPP
 

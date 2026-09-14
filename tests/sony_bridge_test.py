@@ -196,6 +196,39 @@ class NoModes(unittest.TestCase):
     def test_no_modes_and_models_never_share_a_name(self):
         self.assertEqual(set(bridge_module.NO_MODES) & set(bridge_module.MODELS), set())
 
+    def test_controls_and_pending_timers_send_no_queries_after_parking(self):
+        # RX capture contains decoded payloads; Session framing is synthetic.
+        s = Session(name="WH-CH520")
+        s.bridge.send_init(1)
+        s.device(self.HANDSHAKE)
+        before = list(s.frames)
+        for command in ("set anc", "set off", "set ambient", "level 10", "voice on"):
+            s.command(command)
+        s.bridge.send_init(2)
+        s.bridge.probe(0)
+        self.assertEqual(s.frames, before)
+        self.assertEqual(s.sent, ["00 00"])
+        self.assertEqual(s.bridge.exit_code, bridge_module.EXIT_UNSUPPORTED)
+
+    def test_reconnect_parks_again_without_changing_another_sony(self):
+        peer = Session(name="WH-CH720N")
+        peer.device(self.HANDSHAKE)
+        peer_frames, peer_lines = list(peer.frames), list(peer.lines)
+        for _ in range(2):
+            s = Session(name="WH-CH520")
+            s.device(self.HANDSHAKE)
+            self.assertEqual(s.sent, [])
+            self.assertEqual(s.bridge.exit_code, bridge_module.EXIT_UNSUPPORTED)
+        self.assertEqual(peer.frames, peer_frames)
+        self.assertEqual(peer.lines, peer_lines)
+        self.assertIsNone(peer.bridge.exit_code)
+
+    def test_unanswered_handshake_keeps_transient_failure(self):
+        s = Session(name="WH-CH520")
+        s.bridge.send_init(bridge_module.INIT_ATTEMPTS + 1)
+        self.assertEqual(s.bridge.exit_code, bridge_module.EXIT_TRANSIENT)
+        self.assertEqual(s.sent, [])
+
 
 class Silent(unittest.TestCase):
     def test_nothing_answers_and_the_address_is_parked(self):

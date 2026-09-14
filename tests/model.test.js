@@ -1031,3 +1031,18 @@ Deno.test('canonical Sony and JBL SDP records select their own bridge', async ()
       : [ble, '71f20a']);
   }
 });
+
+Deno.test("WH-CH520 owner SDP retains Sony routing for battery-only handling", async () => {
+  const record = await Deno.readTextFile(new URL(
+    "../docs/captures/sony-wh-ch520-bluetoothctl.txt", import.meta.url));
+  const ids = Model.uuidsFromBluetoothctl(record);
+  assertEquals(ids.length, 13);
+  for (const uuids of [ids, [...ids].reverse(), ids.map(id => id.toUpperCase())]) {
+    assertEquals(Model.controlBackend(uuids, ""), "sony");
+    assertEquals(Model.controlBackend(uuids, "44:51:D3:80:51:63"), "sony");
+    assertEquals(Model.sonyUuidFor(uuids), Model.SONY_MDR_V2_UUID);
+  }
+  assertEquals(Model.bridgeArgs("sony", {
+    address: "E8:9E:13:CF:9A:71", uuid: Model.SONY_MDR_V2_UUID, name: "WH-CH520",
+  }), ["E8:9E:13:CF:9A:71", Model.SONY_MDR_V2_UUID, "WH-CH520"]);
+});
