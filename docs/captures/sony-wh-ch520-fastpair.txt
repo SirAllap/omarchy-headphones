@@ -1,0 +1,73 @@
+Sony WH-CH520 — tools/gfps_probe.py, address E8:9E:13:CF:9A:71, Google Fast
+Pair Message Stream UUID (df21fe2c-2515-4fdb-8886-f12c4d67927c), captured
+2026-09-13 by @enobale. Three separate connections, 12s / 30s / 60s.
+
+== Run 1 (12s) =============================================================
+
+profile registered for df21fe2c-2515-4fdb-8886-f12c4d67927c
+NewConnection from /org/bluez/hci0/dev_E8_9E_13_CF_9A_71 fd=9 props={}
+<<< 03010003c2a0d2
+frame group=0x03 (DEVICE_INFO) code=0x01 len=3 payload=c2a0d2
+<<< 030200064451d380516303090007312e302e302e33
+frame group=0x03 (DEVICE_INFO) code=0x02 len=6 payload=4451d3805163
+frame group=0x03 (DEVICE_INFO) code=0x09 len=7 payload=312e302e302e33
+  FIRMWARE: 1.0.0.3
+<<< 04010002033c
+frame group=0x04 (DEVICE_ACTION) code=0x01 len=2 payload=033c
+ConnectProfile returned
+>>> 08110000
+done
+
+== Run 2 (30s) ==============================================================
+
+profile registered for df21fe2c-2515-4fdb-8886-f12c4d67927c
+NewConnection from /org/bluez/hci0/dev_E8_9E_13_CF_9A_71 fd=9 props={}
+<<< 03010003c2a0d2
+frame group=0x03 (DEVICE_INFO) code=0x01 len=3 payload=c2a0d2
+<<< 030200064451d3805163
+frame group=0x03 (DEVICE_INFO) code=0x02 len=6 payload=4451d3805163
+<<< 03090007312e302e302e3304010002033c
+frame group=0x03 (DEVICE_INFO) code=0x09 len=7 payload=312e302e302e33
+  FIRMWARE: 1.0.0.3
+frame group=0x04 (DEVICE_ACTION) code=0x01 len=2 payload=033c
+ConnectProfile returned
+>>> 08110000
+done
+
+== Run 3 (60s) ==============================================================
+
+profile registered for df21fe2c-2515-4fdb-8886-f12c4d67927c
+NewConnection from /org/bluez/hci0/dev_E8_9E_13_CF_9A_71 fd=9 props={}
+<<< 03010003c2a0d2030200064451d3805163
+frame group=0x03 (DEVICE_INFO) code=0x01 len=3 payload=c2a0d2
+frame group=0x03 (DEVICE_INFO) code=0x02 len=6 payload=4451d3805163
+<<< 03090007312e302e302e3304010002033c
+frame group=0x03 (DEVICE_INFO) code=0x09 len=7 payload=312e302e302e33
+  FIRMWARE: 1.0.0.3
+frame group=0x04 (DEVICE_ACTION) code=0x01 len=2 payload=033c
+ConnectProfile returned
+>>> 08110000
+done
+
+== Summary ==================================================================
+
+Every run gets group 3 code 1 (model id c2a0d2), code 2 (BLE address
+4451d3805163) and code 9 (firmware "1.0.0.3") unprompted, right after the
+channel opens — same as every other Fast Pair device in PROTOCOL.md. Group 4
+code 1 (payload 033c) is unexplained; it is not battery (wrong group/code)
+and this probe does not attempt to decode it further.
+
+**No run, across 12s, 30s and 60s, ever produced a group 3 code 3 battery
+frame** — the shape PROTOCOL.md documents for every other Fast Pair device
+here, single-byte for a one-battery set like this one. This probe's own
+`08 11 00 00` (Fast Pair Hearable Control "get ANC state", sent 1.5s after
+connect) also got no reply, matching the JBL device's documented absence of
+that same message group.
+
+The widget nonetheless shows a battery figure (100%, confirmed live via
+`omarchy-shell omaphones status` and `bluetoothctl info`'s own `Battery
+Percentage: 0x64 (100)` line) — this is BlueZ's own native reading, not
+anything from this channel. `Service.qml`'s own comment says this fallback
+exists: "the headset's own figure where there is one battery, otherwise the
+lowest earbud, or BlueZ's rounded single figure when the Message Stream has
+said nothing." This device is the "said nothing" case.

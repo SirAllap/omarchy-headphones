@@ -1,0 +1,29 @@
+{
+  "model": "Sony WH-CH520",
+  "owner": "enobale",
+  "bridge": "sony-bridge",
+  "capture": "docs/captures/sony-wh-ch520.txt",
+  "notes": "Sony's own listing shows no ANC/Ambient on this model, so it is in sony-bridge's NO_MODES rather than MODELS: the bridge asks it nothing at all — not 0x17, not f2 10 — and exits EXIT_UNSUPPORTED right after the handshake, the same 'linked but silent' path the shell already parks without an error banner. This is despite the headset answering NCASM GET 0x17 with a plausible-looking block when asked directly (docs/captures/sony-wh-ch520.txt, run 1): a SET built on that block was ACKed and never once reflected back across four separate live connections, so the reply is not treated as a real control surface. Battery, over Fast Pair, is unaffected and confirmed separately (docs/captures/sony-wh-ch520-fastpair.txt, docs/captures/sony-wh-ch520-live.json).",
+  "session": {
+    "uuid": "v2",
+    "name": "WH-CH520"
+  },
+  "steps": [
+    {
+      "device": "01 00 03 00 10 01 00 00"
+    },
+    {
+      "sent": []
+    },
+    {
+      "line": {
+        "modes": false,
+        "error": "no ANC/Ambient on this model (confirmed on hardware; see PROTOCOL.md)"
+      },
+      "note": "the shell discards this line for exit 3 (DeviceFollower.qml clears ancRunError there) rather than showing it, but the bridge still writes it"
+    },
+    {
+      "exit": 3
+    }
+  ]
+}
