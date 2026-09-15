@@ -1,0 +1,123 @@
+{
+  "model": "Bose QC45",
+  "owner": "Driskol",
+  "bridge": "bose-bridge",
+  "capture": "docs/captures/bose-qc45.txt",
+  "notes": "BMAP on RFCOMM channel 8, confirmed via the [0.1] GET init (which the QC45 answers with '1.1.0' and requires before anything else). The channel probe that picked 8 is off-pin: what is frozen is the wire after the init — the battery [2.2] and current-mode [31.3] GETs, then START [31.3] switches and the device's own readbacks. The QC45 has only Quiet (0, anc) and Aware (1, ambient); its custom slots 2-3 are unconfigured here and were never named. A set is acked by an empty PROCESSING and only the readback that follows moves the line.",
+  "session": {},
+  "steps": [
+    {
+      "call": "open",
+      "note": "the socket is up and the [0.1] init has been answered; battery and current-mode queries go out"
+    },
+    {
+      "sent": [
+        "02 02 01 00",
+        "1f 03 01 00"
+      ]
+    },
+    {
+      "device": "02 02 03 04 5a ff ff 00",
+      "note": "[2.2] STATUS: 90% (0x5a), the only battery this headset has"
+    },
+    {
+      "lines": [],
+      "note": "nothing is printed until the mode is known"
+    },
+    {
+      "device": "1f 03 03 01 01",
+      "note": "[31.3] STATUS: current mode 1 — Aware"
+    },
+    {
+      "line": {
+        "modes": true,
+        "mode": "ambient",
+        "available": [
+          "anc",
+          "ambient"
+        ],
+        "battery": {
+          "headset": 90,
+          "charging": []
+        }
+      }
+    },
+    {
+      "command": "set anc"
+    },
+    {
+      "sent_last": "1f 03 05 02 00 00",
+      "note": "START [31.3] -> mode 0 (Quiet), no voice prompt"
+    },
+    {
+      "device": "1f 03 07 00",
+      "note": "[31.3] PROCESSING: the START is acked, not answered"
+    },
+    {
+      "line_count": 1,
+      "note": "the ack alone must not move the line"
+    },
+    {
+      "fire": "poll"
+    },
+    {
+      "device": "1f 03 03 01 00",
+      "note": "the device readback: mode 0 now"
+    },
+    {
+      "line_has": {
+        "mode": "anc"
+      }
+    },
+    {
+      "command": "set ambient"
+    },
+    {
+      "sent_last": "1f 03 05 02 01 00",
+      "note": "START [31.3] -> mode 1 (Aware)"
+    },
+    {
+      "device": "1f 03 07 00"
+    },
+    {
+      "fire": "poll"
+    },
+    {
+      "device": "1f 03 03 01 01"
+    },
+    {
+      "line_has": {
+        "mode": "ambient"
+      }
+    },
+    {
+      "device": "02 02 03 04 59 ff ff 00",
+      "note": "89% now — the level the device reports is the line's"
+    },
+    {
+      "line_has": {
+        "battery": {
+          "headset": 89,
+          "charging": []
+        }
+      }
+    },
+    {
+      "command": "set off",
+      "note": "the QC45 has no off; a mode outside available is never sent"
+    },
+    {
+      "sent": [
+        "02 02 01 00",
+        "1f 03 01 00",
+        "1f 03 05 02 00 00",
+        "1f 03 01 00",
+        "1f 03 05 02 01 00",
+        "1f 03 01 00"
+      ]
+    },
+    {
+      "exit": null
+    }
+  ]
+}

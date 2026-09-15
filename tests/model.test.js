@@ -885,6 +885,32 @@ const DEVICES = [
     bleAddress: "48:B4:41:00:00:01",
   },
   {
+    model: "Bose QC45",
+    backend: "bose",
+    // The real list from `bluetoothctl info AC:BF:71:64:56:B9`. BMAP is
+    // served on a raw RFCOMM channel the record does not name; the two vendor
+    // UUIDs are what claims the device. The deca-fade one's own channel
+    // speaks an iAP2-style DETECT prelude, not BMAP, so the bridge probes.
+    uuids: [
+      "00000000-deca-fade-deca-deafdecacaff",
+      "00001101-0000-1000-8000-00805f9b34fb",
+      "00001108-0000-1000-8000-00805f9b34fb",
+      "0000110a-0000-1000-8000-00805f9b34fb",
+      "0000110b-0000-1000-8000-00805f9b34fb",
+      "0000110c-0000-1000-8000-00805f9b34fb",
+      "0000110d-0000-1000-8000-00805f9b34fb",
+      "0000110e-0000-1000-8000-00805f9b34fb",
+      "0000110f-0000-1000-8000-00805f9b34fb",
+      "0000111e-0000-1000-8000-00805f9b34fb",
+      "0000112e-0000-1000-8000-00805f9b34fb",
+      "00001130-0000-1000-8000-00805f9b34fb",
+      "00001131-0000-1000-8000-00805f9b34fb",
+      "00001200-0000-1000-8000-00805f9b34fb",
+      "9b26d8c0-a8ed-440b-95b0-c4714a518bcc",
+    ],
+    bleAddress: "48:B4:41:00:00:01",
+  },
+  {
     model: "Sony WH-1000XM4",
     backend: "sony",
     uuids: [
@@ -1019,4 +1045,19 @@ Deno.test("CMF Buds 2 complete owner SDP selects Nothing and passes reported nam
   assertEquals(Model.bridgeArgs("nothing", {
     address: "3C:B0:ED:D0:AC:0B", name: "CMF Buds 2",
   }), ["3C:B0:ED:D0:AC:0B", "CMF Buds 2"]);
+});
+
+Deno.test("WH-CH520 owner SDP retains Sony routing for battery-only handling", async () => {
+  const record = await Deno.readTextFile(new URL(
+    "../docs/captures/sony-wh-ch520-bluetoothctl.txt", import.meta.url));
+  const ids = Model.uuidsFromBluetoothctl(record);
+  assertEquals(ids.length, 13);
+  for (const uuids of [ids, [...ids].reverse(), ids.map(id => id.toUpperCase())]) {
+    assertEquals(Model.controlBackend(uuids, ""), "sony");
+    assertEquals(Model.controlBackend(uuids, "44:51:D3:80:51:63"), "sony");
+    assertEquals(Model.sonyUuidFor(uuids), Model.SONY_MDR_V2_UUID);
+  }
+  assertEquals(Model.bridgeArgs("sony", {
+    address: "E8:9E:13:CF:9A:71", uuid: Model.SONY_MDR_V2_UUID, name: "WH-CH520",
+  }), ["E8:9E:13:CF:9A:71", Model.SONY_MDR_V2_UUID, "WH-CH520"]);
 });

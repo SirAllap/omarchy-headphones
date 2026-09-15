@@ -1,0 +1,43 @@
+Bose QC45 (AC:BF:71:64:56:B9) — failed Profile1 channels, 2026-09-12, mode
+control disabled. tools/bose_probe.py (review revision fc8d7f9). Neither vendor
+UUID reaches BMAP through org.bluez.Profile1:
+  - 00000000-deca-fade-deca-deafdecacaff connects and speaks only a repeating
+    iAP2-style DETECT prelude (ff 55 02 00 ee 10 ~1/s); no BMAP frames.
+  - 9b26d8c0-a8ed-440b-95b0-c4714a518bcc connects and is silent.
+The QC45's BMAP lives on raw RFCOMM channel 8 (see bose-qc45-session.txt).
+=====
+deca-fade (DETECT prelude):
+   0.00s == probing AC:BF:71:64:56:B9 on 00000000-deca-fade-deca-deafdecacaff for 15s
+   0.55s == connected
+   0.55s == props: dbus.Dictionary({}, signature=dbus.Signature('sv'))
+   0.55s >>> [0.1] init GET               00010100
+   0.56s <<< RAW ff550200ee10
+   0.56s <<< [255.85] SETGET  — payload=ff550200
+   1.57s <<< RAW ff550200ee10
+   2.57s <<< RAW ff550200ee10
+   3.57s <<< RAW ff550200ee10
+   4.55s >>> [2.2] GET battery            02020100
+   4.57s <<< RAW ff550200ee10
+   5.57s <<< RAW ff550200ee10
+   6.58s <<< RAW ff550200ee10
+   7.57s <<< RAW ff550200ee10
+   8.55s >>> [31.3] GET current mode      1f030100
+   8.57s <<< RAW ff550200ee10
+   9.57s <<< RAW ff550200ee10
+  10.58s <<< RAW ff550200ee10
+  11.58s <<< RAW ff550200ee10
+  12.56s >>> [31.2] GET index/count       1f020100
+  12.58s <<< RAW ff550200ee10
+  13.58s <<< RAW ff550200ee10
+  14.58s <<< RAW ff550200ee10
+  15.13s == done
+=====
+9b26d8c0 (silent):
+   0.00s == probing AC:BF:71:64:56:B9 on 9b26d8c0-a8ed-440b-95b0-c4714a518bcc for 15s
+   0.59s == connected
+   0.59s == props: dbus.Dictionary({}, signature=dbus.Signature('sv'))
+   0.59s >>> [0.1] init GET               00010100
+   4.59s >>> [2.2] GET battery            02020100
+   8.60s >>> [31.3] GET current mode      1f030100
+  12.60s >>> [31.2] GET index/count       1f020100
+  15.49s == done

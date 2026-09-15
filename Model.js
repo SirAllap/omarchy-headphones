@@ -446,6 +446,8 @@ var NOTHING_NT_LINK_UUID = "aeac4a03-dff5-498f-843a-34487cf133eb"
 var CSR_GAIA_UUID = "00001100-d102-11e1-9b23-00025b00a5a5"
 var SOUNDCORE_UUID_PREFIX = "0cf12d31-fac3-4553-bd80-d6832e7"
 var OPPO_HEYMELODY_UUID = "0000079a-d102-11e1-9b23-00025b00a5a5"
+var BOSE_BMAP_UUID = "00000000-deca-fade-deca-deafdecacaff"
+var BOSE_SPP_UUID = "9b26d8c0-a8ed-440b-95b0-c4714a518bcc"
 
 // The UUIDs `bluetoothctl info <address>` printed, lowercased.
 // Quickshell.Bluetooth exposes no uuids property, so the SDP record is read the
@@ -507,6 +509,12 @@ var BACKENDS = [
     ambient: { min: 1, max: 5, voice: "Wind noise reduction" } },
   { name: "oppo", bridge: "oppo-bridge",
     uuids: [OPPO_HEYMELODY_UUID], args: ["address"] },
+  { name: "bose", bridge: "bose-bridge",
+    // BMAP lives on a raw RFCOMM channel, not on a claimed UUID; the two
+    // claims are the QC45's actual vendor UUIDs. The first also serves an
+    // iAP2-style DETECT channel that is not BMAP — the bridge probes its
+    // channel candidates with BMAP itself.
+    uuids: [BOSE_BMAP_UUID, BOSE_SPP_UUID], args: ["address"] },
   { name: "jbl", bridge: "jbl-bridge",
     ble: true, args: ["bleAddress", "modelId"] }
 ]

@@ -1,0 +1,27 @@
+Device E8:9E:13:CF:9A:71 (public)
+	Name: WH-CH520
+	Alias: WH-CH520
+	Class: 0x00240404 (2360324)
+	Icon: audio-headset
+	Paired: yes
+	Bonded: yes
+	Trusted: yes
+	Blocked: no
+	Connected: yes
+	LegacyPairing: no
+	CablePairing: no
+	UUID: Vendor specific           (00000000-deca-fade-deca-deafdecacaff)
+	UUID: Headset                   (00001108-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: Advanced Audio Distribu.. (0000110d-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Cont.. (0000110f-0000-1000-8000-00805f9b34fb)
+	UUID: Handsfree                 (0000111e-0000-1000-8000-00805f9b34fb)
+	UUID: Headset HS                (00001131-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (8901dfa8-5c7e-4d8f-9f0c-c2b70683f5f0)
+	UUID: Vendor specific           (956c7b26-d49a-4ba8-b03f-b17d393cb6e2)
+	UUID: Vendor specific           (df21fe2c-2515-4fdb-8886-f12c4d67927c)
+	Modalias: usb:v054Cp0EADd1000
+	Battery Percentage: 0x64 (100)

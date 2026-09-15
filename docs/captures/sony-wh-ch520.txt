@@ -1,0 +1,155 @@
+Sony WH-CH520 — tools/sony_probe.py, address E8:9E:13:CF:9A:71, MDR v2 UUID
+(956c7b26-d49a-4ba8-b03f-b17d393cb6e2), captured 2026-09-12 by @enobale.
+
+Four separate connections, run back to back; each starts fresh with the
+CONNECT_GET_PROTOCOL_INFO handshake and asks all four v2/v1 candidate types
+(0x17, 0x15, 0x22, 0x02). Only 0x17 ever answers; 0x15, 0x22 and 0x02 never
+reply on this headset, on any run.
+
+== Run 1: plain GET, no write ============================================
+
+   0.97s == connected
+   0.97s >>> CONNECT_GET_PROTOCOL_INFO    seq=0 3e0c000000000200000e3c
+   1.15s <<< ACK seq=1
+   1.20s <<< type=0x0c seq=1 payload=0100030010010000  PROTOCOL_INFO (8 bytes => v2)
+   1.30s >>> NCASM_GET_PARAM 0x17         seq=1 3e0c010000000266178c3c
+   1.37s <<< ACK seq=0
+   1.39s <<< type=0x0c seq=0 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+   1.52s >>> NCASM_GET_PARAM 0x15         seq=0 3e0c00000000026615893c
+   1.55s <<< ACK seq=1
+   1.70s >>> NCASM_GET_PARAM 0x22         seq=1 3e0c01000000026622973c
+   1.78s <<< ACK seq=0
+   1.93s >>> NCASM_GET_PARAM 0x02         seq=0 3e0c00000000026602763c
+   1.96s <<< ACK seq=1
+  15.29s == done
+
+This is the headset's actual resting state through this whole capture: NC on
+(reported as "nc"/ANC), ambient off, voice off, level byte 1. Nothing in the
+device's own settings was touched to get this baseline.
+
+== Run 2: set:off — accepted, not applied =================================
+
+   0.71s == connected
+   0.71s >>> CONNECT_GET_PROTOCOL_INFO    seq=0 3e0c000000000200000e3c
+   0.85s <<< ACK seq=1
+   0.86s <<< type=0x0c seq=1 payload=0100030010010000  PROTOCOL_INFO (8 bytes => v2)
+   1.00s >>> NCASM_GET_PARAM 0x17         seq=1 3e0c010000000266178c3c
+   1.06s <<< ACK seq=0
+   1.06s <<< type=0x0c seq=0 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+   1.21s >>> NCASM_GET_PARAM 0x15         seq=0 3e0c00000000026615893c
+   1.24s <<< ACK seq=1
+   1.39s >>> NCASM_GET_PARAM 0x22         seq=1 3e0c01000000026622973c
+   1.44s <<< ACK seq=0
+   1.59s >>> NCASM_GET_PARAM 0x02         seq=0 3e0c00000000026602763c
+   1.62s <<< ACK seq=1
+   1.77s >>> NCASM_SET_PARAM off          seq=1 3e0c01000000076817010000000a9e3c
+   1.79s <<< ACK seq=0
+   1.94s >>> NCASM_GET_PARAM 0x17 (readback) seq=0 3e0c000000000266178b3c
+   2.01s <<< ACK seq=1
+   2.04s <<< type=0x0c seq=1 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+  14.82s == done
+
+The SET frame (68 17 01 00 00 00 0a) is ACK'd like any other frame, but the
+explicit GET readback six lines later — and no unsolicited NTFY in the
+remaining ~13s the connection stayed open — both show the exact same bytes
+as the pre-write GET. The device did not turn NC off.
+
+== Run 3: set:ambient:10 — accepted, not applied ===========================
+
+   0.68s == connected
+   0.68s >>> CONNECT_GET_PROTOCOL_INFO    seq=0 3e0c000000000200000e3c
+   0.81s <<< ACK seq=1
+   0.83s <<< type=0x0c seq=1 payload=0100030010010000  PROTOCOL_INFO (8 bytes => v2)
+   0.96s >>> NCASM_GET_PARAM 0x17         seq=1 3e0c010000000266178c3c
+   1.01s <<< ACK seq=0
+   1.03s <<< type=0x0c seq=0 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+   1.16s >>> NCASM_GET_PARAM 0x15         seq=0 3e0c00000000026615893c
+   1.19s <<< ACK seq=1
+   1.34s >>> NCASM_GET_PARAM 0x22         seq=1 3e0c01000000026622973c
+   1.42s <<< ACK seq=0
+   1.57s >>> NCASM_GET_PARAM 0x02         seq=0 3e0c00000000026602763c
+   1.60s <<< ACK seq=1
+   1.75s >>> NCASM_SET_PARAM ambient      seq=1 3e0c01000000076817010101000aa03c
+   1.78s <<< ACK seq=0
+   1.93s >>> NCASM_GET_PARAM 0x17 (readback) seq=0 3e0c000000000266178b3c
+   2.02s <<< ACK seq=1
+   2.04s <<< type=0x0c seq=1 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+  15.06s == done
+
+Same result: SET (68 17 01 01 01 00 0a) ACK'd, readback unchanged. The
+device neither switched to Ambient nor adopted the requested level 10 (0a).
+
+== Run 4: set:nc:1 — same-state write, for a redundant-write baseline =====
+
+   0.83s == connected
+   0.83s >>> CONNECT_GET_PROTOCOL_INFO    seq=0 3e0c000000000200000e3c
+   1.03s <<< ACK seq=1
+   1.08s <<< type=0x0c seq=1 payload=0100030010010000  PROTOCOL_INFO (8 bytes => v2)
+   1.18s >>> NCASM_GET_PARAM 0x17         seq=1 3e0c010000000266178c3c
+   1.23s <<< ACK seq=0
+   1.25s <<< type=0x0c seq=0 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+   1.38s >>> NCASM_GET_PARAM 0x15         seq=0 3e0c00000000026615893c
+   1.40s <<< ACK seq=1
+   1.55s >>> NCASM_GET_PARAM 0x22         seq=1 3e0c01000000026622973c
+   1.62s <<< ACK seq=0
+   1.77s >>> NCASM_GET_PARAM 0x02         seq=0 3e0c00000000026602763c
+   1.80s <<< ACK seq=1
+   1.95s >>> NCASM_SET_PARAM nc           seq=1 3e0c010000000768170101000001963c
+   1.97s <<< ACK seq=0
+   2.12s >>> NCASM_GET_PARAM 0x17 (readback) seq=0 3e0c000000000266178b3c
+   2.17s <<< ACK seq=1
+   2.19s <<< type=0x0c seq=1 payload=67170101000001  NCASM {'type': '0x17', 'len': 7, 'gen': 'v2', 'mode': 'nc', 'voice': False, 'level': 1}
+  15.50s == done
+
+A write of the state the headset was already in (68 17 01 01 00 00 01) is
+ACK'd and read back unchanged too, which is the expected/uninteresting case
+and mainly confirms the framing and checksum math around a "1" level byte.
+
+== Run 5: SYSTEM_GET_STATUS wearing (f2 10) — sent, never answered =========
+
+Standalone probe (tools/sony_wear_probe.py, written for this run: none of
+the other tools here send this frame), same MDR v2 channel, 20s window.
+
+   0.23s == connected
+   0.23s >>> CONNECT_GET_PROTOCOL_INFO    seq=0 3e0c000000000200000e3c
+   0.23s connected profile
+   0.27s <<< ACK seq=1
+   0.29s <<< type=0x0c seq=1 payload=0100030010010000
+   0.42s >>> SYSTEM_GET_STATUS wearing (f2 10) seq=1 3e0c0100000002f210113c
+   0.51s <<< ACK seq=0
+  20.02s == done
+
+`f2 10` (SYSTEM_GET_STATUS, wearing status — see the WH-1000XM6 section of
+PROTOCOL.md for the RET/NTFY shapes it would come back as, `f3 10 ..` /
+`f5 10 ..`) is ACK'd at the transport level like any other frame and gets no
+`f3`/`f5` reply in the following ~19.6s. This matches
+`omarchy-shell omaphones worn` reading "unsupported" while this same headset
+was followed live by the widget.
+
+== Summary =================================================================
+
+The WH-CH520 answers the same NCASM_GET_PARAM 0x17 as the WH-CH720N, with the
+same 7-byte v2 payload shape, and reports NC on/off, Ambient on/off, voice
+and a level byte the same way when asked (runs 1-4) — but see PROTOCOL.md's
+WH-CH520 section: Sony's own listing shows no ANC/Ambient hardware on this
+model, and every SET this probe sent (runs 2-4) was ACK'd and never once
+reflected back, so this reply is not treated as a real control surface —
+sony-bridge's NO_MODES asks this model nothing at all, this GET included.
+
+Not confirmed, across four separate connections and both an "off" and an
+"ambient" attempt with waits of 13-15s after each write and no press of the
+headset's own button during any of them: NCASM_SET_PARAM 0x17 changes
+anything the headset reports back. Every SET frame this probe sent was
+ACK'd at the transport level and left the reported NC/Ambient/level/voice
+state exactly as it was before the write. Whether the headset's own button
+can still move it through these states (and have that show up over this
+same channel) was not tested here — this session has no way to press it.
+
+No wear sensor answered either (run 5): `f2 10` sent, no `f3`/`f5` reply in
+20s.
+
+Battery is not this channel's business at all — see
+docs/captures/sony-wh-ch520-fastpair.txt for that evidence, which turned up
+its own gap: this device never sends the Fast Pair Message Stream's own
+battery frame either, in three separate windows up to 60s. The single-figure
+battery the widget shows is BlueZ's own native reading.

@@ -742,6 +742,90 @@ were asked on this headset and neither was answered, so neither is in the
 bridge: their block lengths are unconfirmed, and a variant nobody has seen
 answered would be a guess sent to somebody's working headphones.
 
+### WH-CH520: battery only, no ANC/Ambient
+
+A **Sony WH-CH520** (`E8:9E:13:CF:9A:71`, modalias `usb:v054Cp0EADd1000`).
+Sony's own listing for this model has no ANC or Ambient mode, and this
+section is the hardware evidence for why the plugin treats it that way
+despite the MDR channel answering as if it had one. Full transcripts:
+[`docs/captures/sony-wh-ch520.txt`](docs/captures/sony-wh-ch520.txt) (MDR,
+five runs) and
+[`docs/captures/sony-wh-ch520-fastpair.txt`](docs/captures/sony-wh-ch520-fastpair.txt)
+(Fast Pair, three runs).
+
+It serves the same MDR v2 UUID (`956c7b26-…`) as the CH720N. Handshake,
+`CONNECT_RET_PROTOCOL_INFO`, 8 bytes so v2:
+
+```
+01 00 03 00 10 01 00 00
+```
+
+Asked directly (`tools/sony_probe.py`, not what the bridge sends this model
+— see below), the 0x17 block and its layout look exactly like the CH720N's:
+
+```
+->  66 17                       GET
+<-  67 17 01 01 00 00 01        RET: on, NC (not ambient), voice off, level 1
+->  66 15                       GET
+<-  ACK, then nothing
+->  66 22                       GET
+<-  ACK, then nothing
+->  66 02                       GET
+<-  ACK, then nothing
+```
+
+But **no SET was ever seen to change anything it reported.** Four separate
+connections each sent one SET — `off`, `ambient` (with a level), a redundant
+same-state `nc`, and a live re-assertion through the widget's own
+(pre-fix) bridge — and every one of them was ACKed at the transport level
+and then contradicted by the very next `NCASM_GET_PARAM 0x17`, which kept
+reporting exactly the pre-write state, for as long as thirteen seconds with
+no unsolicited `0x69` in between either:
+
+```
+->  68 17 01 00 00 00 0a        SET off        (this probe's own default level)
+<-  ACK
+->  66 17 (readback)
+<-  67 17 01 01 00 00 01        unchanged: still on, still NC, still level 1
+
+->  68 17 01 01 01 00 0a        SET ambient, level 10
+<-  ACK
+->  66 17 (readback)
+<-  67 17 01 01 00 00 01        unchanged
+```
+
+The returned block is not evidence of a working ANC/Ambient control.
+The probe observed unchanged replies after writes; it does not establish
+why the firmware returns this block.
+
+The wear question gets the same non-answer, asked directly rather than
+inferred (`tools/sony_wear_probe.py`, a fourth standalone tool — none of the
+others send this frame on their own):
+
+```
+->  f2 10                       SYSTEM_GET_STATUS, wearing status
+<-  ACK, then nothing for 20s
+```
+
+And battery is not this channel's business regardless: three separate Fast
+Pair Message Stream connections (12s, 30s, 60s) get model id, BLE address
+and firmware unprompted, same as every other device in this file, but never
+once the `group 3 code 3` battery frame the CH720N and every other
+single-figure Sony device send right alongside them. The 100% the panel
+shows is BlueZ's own native reading — `Service.qml`'s documented fallback
+for "the Message Stream has said nothing" — not anything from this channel.
+
+Put together: this model gets sony-bridge's `NO_MODES`, not a `MODELS` row.
+It is asked nothing at all on the MDR channel — not `0x17`, not `f2 10` —
+and exits `EXIT_UNSUPPORTED` right after the handshake, the same "linked but
+silent" path an actually-silent headset takes, so the shell parks it and the
+panel shows battery with no mode row. Whether the headset's own physical
+button does anything this channel would ever see was not tested: nothing in
+this session can press it, and it would not change what Sony documents
+about the hardware regardless. `tests/pins/sony/wh-ch520.json` pins exactly
+the asked-nothing path. See [the review evidence notes](docs/SONY-WH-CH520-REVIEW.md)
+for the battery source and the historical live report.
+
 What the bridge does with all this: `sonyUuidFor()` in `Model.js` picks which of
 the two UUIDs to hand it, and the bridge registers that one — that is all the
 UUID decides. The handshake's length **orders** the questions, `0x02` first on a
@@ -753,8 +837,8 @@ numbers do not collide across the two generations, so a `0x02` block is read as
 v1 and a `0x17` block as v2, whatever the UUID and the handshake suggested. Once
 a type has answered, a block of any other type is dropped.
 
-`tests/sony_bridge_test.py` pins one session per model — this one, the CH720N
-and the WH-1000XM5 — frame for frame.
+`tests/sony_bridge_test.py` pins one session per model — this one, the CH720N,
+the WH-1000XM5 and the WH-CH520 — frame for frame.
 
 ## WH-1000XM6: NCASM 0x19 notifications and wear status
 
@@ -781,11 +865,14 @@ confirmed on the Sony WH-1000XM6.
 
 Which headsets are asked is a row in `MODELS` in `sony-bridge`, keyed by the
 name the headset reports (`bluetoothctl info` shows it as `Name`), which
-`DeviceFollower.qml` passes as the bridge's third argument. The WH-CH720N, the
-WH-1000XM5 and the WH-1000XM4 are not asked — none of them has been seen to
-answer `f2 10`, and their sessions in `tests/sony_bridge_test.py` are unchanged
-by this — while a model with no row is, on the chance it has a sensor; an
-unanswered question costs nothing, since `worn` is only ever set by a reply.
+`DeviceFollower.qml` passes as the bridge's third argument. The WH-CH720N,
+the WH-1000XM5 and the WH-1000XM4 are not asked — none of them has been seen
+to answer `f2 10`, and their sessions in `tests/sony_bridge_test.py` are
+unchanged by this — while a model with no row is, on the chance it has a
+sensor; an unanswered question costs nothing, since `worn` is only ever set
+by a reply. The WH-CH520 is a third case, `NO_MODES` rather than a `MODELS`
+row: it is asked nothing on this channel at all, `f2 10` included — see its
+own section above.
 
 ## Xiaomi Buds 5 Pro — Compact GAIA on SPP
 
@@ -1453,6 +1540,125 @@ tools/oppo_probe.py 28:6F:40:D9:A5:A7 20 set:anc
 
 The widget's bridge holds the same profile, so turn `useModeControl` off
 before running it — a second client is refused while the first is up.
+
+## Bose QC45 — BMAP over RFCOMM
+
+Confirmed on a **Bose QC45** (`AC:BF:71:64:56:B9`, 90% at capture time). Its SDP
+record (from `bluetoothctl info`) carries two vendor UUIDs — the Bose BMAP
+placeholder `00000000-deca-fade-deca-deafdecacaff` and `9b26d8c0-a8ed-440b-95b0-c4714a518bcc` —
+beside SPP and the audio profiles. Neither UUID names the channel BMAP lives
+on, and claiming one through `org.bluez.Profile1` does not reach BMAP at all:
+the deca-fade UUID's own service answers every connection with a repeating
+iAP2-style DETECT prelude (`ff 55 02 00 ee 10` every second) and the
+`9b26d8c0-…` service stayed silent. The bridge ignores the claims and opens a
+**raw RFCOMM socket** on channel **8** (found by probing `sdpconnect`'s table
+and the QC45's own quirk — BMAP rides on the channel its service record never
+states) and asks `[0.1]` until the headset answers.
+
+BMAP frames are `[fblock u8][func u8][flags u8][len u8][payload]`;
+the operator is the low nibble of flags. Init is function 1 of block 0;
+block 2 reports battery and block 31 controls modes. The stored capture
+prints decoded replies after a collection window, so it does not establish
+individual response or switching latency. START's PROCESSING is not mode
+confirmation: the bridge polls for the device's current-mode STATUS.
+
+### Frames
+
+Init — every GET answers only after this, and the answer is the probe:
+
+```
+->  00 01 01 00                [0.1]  GET
+<-  00 01 03 05 31 2e 31 2e 30 [0.1]  STATUS len 5: "1.1.0"
+```
+
+### Listening mode
+
+```
+->  1f 03 01 00                [31.3] GET
+<-  1f 03 03 01 01             [31.3] STATUS: mode index 1
+```
+
+`[31.3]` START sets the index; the readback GET is
+what the bridge reports:
+
+```
+->  1f 03 05 02 00 00 -> 1f 03 07 00   [31.3] START idx 0 -> PROCESSING
+    (on a subsequent readback)
+->  1f 03 01 00                      [31.3] GET
+<-  1f 03 03 01 00                   [31.3] STATUS idx 0
+```
+
+Index 1 (`01`) = Aware, index 0 (`00`) = Quiet. The QC45 has **no Off**; its
+custom slots 2 and 3 come back configured-but-blank from the GET-All burst and
+are never offered. GET-All (`[31.1] START` with empty payload) returned the
+burst that names them — `[31.1]` PROCESSING, `[31.2]` STATUS, `[31.3]` STATUS,
+`[31.5]` STATUS, `[31.6]` PROCESSING plus four 47-byte ModeConfig STATUS frames
+(mode 0 "Quiet", mode 1 "Aware", 2 and 3 blank), `[31.6]` RESULT, `[31.8]`
+STATUS, `[31.1]` RESULT — the bridge does not send it at runtime.
+
+### Battery
+
+```
+->  02 02 01 00                [2.2] GET
+<-  02 02 03 04 5a ff ff 00    [2.2] STATUS: 90%, then nothing for earbuds/case
+```
+
+The level is the first payload byte; the remaining bytes are `ff ff 00`.
+Their meanings, including charging, are not established by this capture. `{"headset": 90, "charging": []}` is the whole battery on
+this device.
+
+### In the widget
+
+[`bose-bridge`](bose-bridge) connects to channels 8, 2, 9 in turn and only
+counts one that answers the `[0.1]` probe, then writes the same lines the other
+bridges do, battery riding on the mode line since the QC45 has no earpieces:
+
+```json
+{"modes": true, "mode": "ambient", "available": ["anc","ambient"],
+ "battery": {"headset": 90, "charging": []}}
+```
+
+Commands on stdin: `set anc|ambient`. Exit codes match the other bridges: 0
+clean, 1 transient, 3 parked (sockets opened but no `[0.1]` answer, or no mode
+answer in ten seconds), 4 setup. `tests/bose_bridge_test.py` pins the probe, the
+two queries, the STARTs and the answers above frame for frame, and
+`tests/pins/bose/qc45.json` replays the decoded replies from the original
+capture plus a synthetic 89% battery-change sample, identified below.
+
+### The capture
+
+[`docs/captures/bose-qc45.txt`](docs/captures/bose-qc45.txt) records decoded
+init, 90% battery, mode GETs, START/PROCESSING/readbacks for indexes 0–3,
+and the GET-All burst. The original session ended with a verified return to
+Aware. RX headers are reconstructed in the pin from decoded fields; the file
+is not a complete raw-byte capture. In the
+[owner confirmation](https://github.com/ncr/omarchy-headphones/pull/13#issuecomment-5648598888),
+@Driskol explicitly identified the pin's `59 ff ff 00` (89%) sample as
+synthetic, derived from the observed 90% reply. It is a battery-change test,
+not an observed device reply; the original pin remains unchanged.
+
+The owner added two recordings in `d663c6d`, made with review revision
+`fc8d7f9`: [`bose-qc45-session.txt`](docs/captures/bose-qc45-session.txt)
+contains complete raw RX chunks and decoded frames for initialization, 100%
+battery, GET-All, mode 0–3 readbacks and verified restoration to initial mode
+1; [`bose-qc45-channels.txt`](docs/captures/bose-qc45-channels.txt) records
+the repeating DETECT prelude and silent Profile1 service described above.
+
+The complete `bluetoothctl info` output mentioned in the owner's comment is
+absent from the supplied files. The two vendor UUIDs have connection traces,
+but the full UUID list in the routing test is not independently corroborated
+by a stored SDP listing. The maintainer explicitly accepted this evidence
+gap for QC45 support in 1.3.2; no missing output was reconstructed.
+
+The updated [`tools/bose_session.py`](tools/bose_session.py) logs raw chunks
+at receipt, retains partial frames and restores the actual initial mode in
+`finally`, verifying readback or reporting failure. Release mode control
+before using it. Channel 8 is observed on this QC45; fallback candidates 2/9
+remain unverified on it. `bose_probe.py` is a diagnostic for the unsuccessful
+Profile1 route, not the recommended QC45 capture tool.
+
+See [the review and owner confirmation](docs/BOSE-REVIEW.md) for the owner's
+test results on `fc8d7f9`, software coverage and remaining evidence limits.
 
 ## Canonical owner captures — 2026-09-08
 
