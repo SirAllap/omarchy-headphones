@@ -14,20 +14,27 @@ are shared, while each model's protocol and evidence stay separate. Before
 releasing it, I'd like your help testing your headphones: I can test my Sony
 WH-CH720N and JBL TUNE230NC TWS, but I don't have your model.
 
-Could you test candidate **CANDIDATE_SHA** and send back the results, including
-anything that fails? The instructions are in **OWNER_TESTING_LINK**. Your
-currently installed plugin can remain in place while the candidate adapter is
-tested from an isolated clone.
+Please paste the prompt below into your coding assistant to test candidate
+**CANDIDATE_SHA**. It will prepare the isolated clone, run the tests, manage the
+recordings and assemble the results for you to return, including failures.
+You'll need your headphones nearby to perform physical actions and describe
+what you observe. The detailed workflow is in **OWNER_TESTING_LINK**.
 
 We're also keeping an independent BTSnoop recording and a timestamped log of
 what you did and observed. That will let us revisit unknown packets and test
 future changes without repeatedly asking you to record the same scenarios.
 
-If you use a coding assistant, you can paste this prompt:
+Paste this into your coding assistant:
 
 ```text
 Help me test my MODEL headphones against Omaphones candidate CANDIDATE_SHA
 from https://github.com/ncr/omarchy-headphones. My GitHub login is AUTHOR.
+
+Lead the session from preparation through the return report. Run the commands,
+manage recording and logging, inspect failures and prepare the result files.
+Ask me for missing information, physical actions and independent observations,
+one short step at a time. Ask for system authorization only when needed. Don't
+make me copy commands or edit JSON/CSV when you can do that work yourself.
 
 Use a separate clone checked out at that exact commit. Read AGENTS.md and
 docs/OWNER-TESTING.md there, then run tools/check and save the results. Confirm
@@ -65,8 +72,9 @@ upload anything automatically. Don't edit old owner pins or turn a failed
 check into a pass by changing its expectations.
 ```
 
-Even an incomplete test is helpful—please say what you could check and where
-you got stuck. I'll review the returned recordings, fix any issues and request
-a retest where needed before deciding on the release.
+Even an incomplete test is helpful—return the assistant's report and reviewed
+session archive, including where the process got stuck. I'll review the
+recordings, fix any issues and request a retest where needed before deciding
+on the release.
 
 Thank you!

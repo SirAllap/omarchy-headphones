@@ -6,6 +6,26 @@ its current routing; `tools/check-live` against the installed plugin does not
 test this candidate's QML. A successful adapter result is one part of migration
 review. Shell integration and a release remain separate steps.
 
+## The coding assistant leads the session
+
+Every contributor is expected to use a coding assistant. The contributor starts
+with the prompt in [the GitHub message](CONTRIBUTOR-REFACTOR-MESSAGE.md). The
+steps and command examples below are the assistant's operating instructions.
+
+The assistant prepares the clone, identifies the device, runs commands, manages
+capture processes and timeline files, checks results, restores settings and
+assembles the return archive and draft reply. It gathers information available
+on the machine before asking the owner. It asks the owner one short question or
+physical action at a time and handles terminal input for the test tool using
+the owner's actual responses. It never supplies an observation on their behalf.
+
+The owner has the headphones nearby, presses buttons, handles the case or
+charging cable, performs app actions the assistant cannot access, and reports
+what they see or hear. They provide missing information and any necessary
+system authorization, then review and return the prepared results. Copying
+commands, editing data files and interpreting protocol bytes belong to the
+assistant's work, not the owner's checklist.
+
 ## 1. Prepare the candidate and record identity
 
 Run `tools/check` in the candidate clone and retain its output. Confirm that the
