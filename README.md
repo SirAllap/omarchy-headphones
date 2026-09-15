@@ -82,11 +82,11 @@ Headphones not on the list? [Add yours](#add-your-own-headphones).
 <table>
 <tr>
 <td width="50%"><img src="docs/gallery/cmf-headphone-pro.png" alt="CMF Headphone Pro: one battery, Off / ANC / Ambient, the ANC level row (Low / Mid / High / Adaptive) and the partially cropped low-latency row" width="100%"></td>
-<td width="50%"></td>
+<td width="50%"><img src="docs/gallery/cmf-buds-2.png" alt="CMF Buds 2: left, right and case, Off / ANC / Ambient, the ANC level row (Low / Mid / High / Adaptive) and low latency" width="100%"></td>
 </tr>
 <tr>
 <td align="center">CMF Headphone Pro — <a href="https://github.com/adilahmad17">@adilahmad17</a><br><small>Original capture; low-latency row partly cropped.</small></td>
-<td align="center"></td>
+<td align="center">CMF Buds 2 — <a href="https://github.com/HanzGeeratz">@HanzGeeratz</a></td>
 </tr>
 </table>
 
