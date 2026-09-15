@@ -199,7 +199,8 @@
     color: var(--ink);
     font-weight: 700;
   }
-  #repeat {
+  #repeat,
+  #pause-after {
     margin: 12px 0 0 8px;
   }
   @media (max-width:480px) {
@@ -254,10 +255,10 @@
       <h1 id="question">Your observations, one step at a time.</h1>
       <p class="context" id="context"></p>
       <div id="form"
-        hidden><div id="choices" role="group" aria-label="Answer choices"></div><label for="comment">Comment <span id="required">(optional)</span></label><textarea id="comment" maxlength="4000" placeholder="Describe what you noticed, including anything you are unsure about."></textarea><button id="submit" disabled>Save &amp; next</button><button id="repeat" disabled hidden>Save &amp; repeat</button></div>
+        hidden><div id="choices" role="group" aria-label="Answer choices"></div><label for="comment">Comment <span id="required">(optional)</span></label><textarea id="comment" maxlength="4000" placeholder="Describe what you noticed, including anything you are unsure about."></textarea><button id="submit" disabled>Save &amp; start next</button><button id="repeat" disabled hidden>Save &amp; repeat</button><button id="pause-after" disabled hidden>Save &amp; pause</button></div>
       <p class="error" id="error" role="alert"></p>
       <p id="status" role="status"
-        aria-live="polite">Keep the headphones nearby. Changes wait for your readiness.</p>
+        aria-live="polite">Keep the headphones nearby. Saving an observation starts the next test shown above.</p>
     </section>
     <div
       class="controls"><span class="footer">Answers stay with the recording.<br>Unsure and repeated attempts are kept.</span><button id="stop">Stop session</button></div>
@@ -383,12 +384,16 @@
     $("comment").value = "";
     $("submit").disabled = true;
     $("repeat").disabled = true;
+    $("pause-after").disabled = true;
     const instant = ["readiness", "paused"].includes(q.phase);
     $("submit").hidden = instant;
     $("submit").textContent = q.phase === "observation"
-      ? "Save & next"
+      ? (q.context?.startsNext?.id === "restoration"
+        ? "Save & finish"
+        : "Save & start next")
       : "Save answer";
     $("repeat").hidden = !q.context?.repeatAllowed;
+    $("pause-after").hidden = !q.context?.repeatAllowed;
     $("comment").hidden = instant;
     document.querySelector('label[for="comment"]').hidden = instant;
     $("required").textContent =
@@ -407,6 +412,7 @@
         }
         $("submit").disabled = false;
         $("repeat").disabled = false;
+        $("pause-after").disabled = false;
         if (instant || choice === "stop") submitAnswer();
       };
       $("choices").append(b);
@@ -417,6 +423,7 @@
     busy = true;
     $("submit").disabled = true;
     $("repeat").disabled = true;
+    $("pause-after").disabled = true;
     try {
       await api("/answer", {
         type: "owner-answer",
@@ -435,12 +442,14 @@
       $("error").textContent = e.message;
       $("submit").disabled = false;
       $("repeat").disabled = false;
+      $("pause-after").disabled = false;
     } finally {
       busy = false;
     }
   }
   $("submit").onclick = () => submitAnswer();
   $("repeat").onclick = () => submitAnswer("repeat");
+  $("pause-after").onclick = () => submitAnswer("pause");
   $("stop").onclick = async () => {
     try {
       await api("/stop", { stop: true });
@@ -460,6 +469,7 @@
         "Connection to the runner is unavailable. No answer was submitted. Check the assistant’s report before restarting.";
       $("submit").disabled = true;
       $("repeat").disabled = true;
+      $("pause-after").disabled = true;
     }
     if (!finished) setTimeout(poll, 700);
   }

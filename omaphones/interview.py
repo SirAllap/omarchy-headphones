@@ -39,8 +39,8 @@ def validate_answer(answer, question, channel):
         raise ValueError('describe the performed action or actual observation in the comment')
     if 'next' in answer and (question['phase'] != 'observation'
             or not question.get('context', {}).get('repeatAllowed')
-            or answer['next'] not in ('continue', 'repeat')):
-        raise ValueError('next is allowed only for a repeatable observation: continue or repeat')
+            or answer['next'] not in ('continue', 'repeat', 'pause')):
+        raise ValueError('next is allowed only for a repeatable observation: continue, repeat or pause')
     return answer
 
 
@@ -66,10 +66,14 @@ class Console:
 
     def ask(self, question, timeout):
         deadline = time.monotonic() + timeout
+        progress = question.get('context', {}).get('progress') or {}
+        preview = '\nNow: %s\nNext: %s' % (
+            (progress.get('current') or {}).get('title', question['stepId']),
+            (progress.get('next') or {}).get('title', 'End of session')) if progress else ''
         self.notify(question if self.mode == 'json' else {
             'message': '\n%s\n%s\nChoices: %s\nReply with a choice, optionally followed by | your comment.' % (
-                question['device'], question['question'], ' / '.join(question['choices'])) +
-                ('\nTo save this observation and repeat, prefix the choice with repeat: (e.g. repeat:unsure).'
+                question['device'], question['question'], ' / '.join(question['choices'])) + preview +
+                ('\nSaving starts the displayed next step. Prefix with repeat: or pause: to save and repeat or pause instead.'
                  if question.get('context', {}).get('repeatAllowed') else '')})
         while True:
             while b'\n' not in self.buffer and not self.eof:
@@ -91,10 +95,10 @@ class Console:
                 else:
                     choice, _, comment = line.rstrip('\r\n').partition('|')
                     choice = choice.strip()
-                    repeat = choice.startswith('repeat:')
-                    answer = make_answer(question, choice.removeprefix('repeat:') if repeat else choice, comment.strip(), self.channel)
-                    if repeat:
-                        answer['next'] = 'repeat'
+                    navigation = next((n for n in ('repeat', 'pause') if choice.startswith(n + ':')), None)
+                    answer = make_answer(question, choice[len(navigation) + 1:] if navigation else choice, comment.strip(), self.channel)
+                    if navigation:
+                        answer['next'] = navigation
                 return validate_answer(answer, question, self.channel)
             except (ValueError, TypeError) as error:
                 self.notify({'type': 'input-error', 'message': str(error)})
@@ -115,6 +119,7 @@ class Interview:
         self.skipped = []
         self.plan = []
         self.active_step = None
+        self.advance_to = None
         self.outcomes = {}
         self.started = meta['startedMonotonicNs']
         self.event('session', 'Owner interview started', scenarioVersion=1,
@@ -163,6 +168,8 @@ class Interview:
     def ask(self, step, attempt, phase, question, choices, **context):
         self.activate(step)
         context['progress'] = self.progress()
+        if context.get('repeatAllowed'):
+            context['startsNext'] = (self.progress() or {}).get('next')
         request = dict(type='owner-question', version=1, sessionId=self.session_id,
                        requestId=str(uuid.uuid4()), stepId=step, attempt=attempt,
                        phase=phase, device=self.device, language='en', question=question,
@@ -188,13 +195,23 @@ class Interview:
             raise Stopped('owner stopped the test')
         return answer
 
+    def check_stopped(self):
+        if getattr(self.transport, 'stopped', False):
+            raise Stopped('owner stopped from the browser')
+
     def ready(self, step, attempt, question, **context):
+        self.check_stopped()
+        target, self.advance_to = self.advance_to, None
+        if target == step:
+            self.activate(step)
+            self.event('action', 'Starting the next step requested with the saved observation.', stepId=step)
+            return True
         while True:
             answer = self.ask(step, attempt, 'readiness', question,
                               ['ready', 'pause', 'skip', 'stop'], **context)
             if answer['answer'] == 'pause':
                 self.ask(step, attempt, 'paused', 'Paused. Resume when you are ready.', ['resume', 'stop'])
-                continue
+                return True
             if answer['answer'] == 'skip':
                 self.skipped.append({'stepId': step, 'attempt': attempt, 'text': answer['text']})
                 return False
@@ -223,10 +240,12 @@ class Interview:
                 self.event('baseline', 'Restoring the comparison baseline before the repeated attempt.',
                            stepId=case, attempt=attempt)
                 for cmd, key, original in restore_actions(profile, baseline):
+                    self.check_stopped()
                     client.set(cmd, key, original)
-                if not self.ready(case, attempt, 'Baseline restored. Listen now; ready to repeat the change?',
-                                  baseline=baseline.get('values', {}), control=field, target=value):
-                    return None
+                for seconds in (2, 1):
+                    self.check_stopped()
+                    self.event('baseline', 'Listen to the restored baseline. Repeating in %d…' % seconds, stepId=case, attempt=attempt)
+                    time.sleep(1)
             if client.state.get('values', {}).get(field) == value:
                 self.event('unchanged', 'The requested value is already reported; there is no new listening comparison.',
                            stepId=case, attempt=attempt)
@@ -234,6 +253,7 @@ class Interview:
             self.event('action', 'Changing one control. Listen to what happens.', stepId=case, attempt=attempt)
             # A failed command is retained and goes straight to restoration. Do not
             # require an owner answer while an adapter is failing.
+            self.check_stopped()
             state = client.set(command, field, value)
             self.event('observation', 'The device reported the requested value. Listen now.',
                        stepId=case, attempt=attempt)
@@ -245,7 +265,12 @@ class Interview:
                               actionEntry=getattr(client, 'last_action_entry', None),
                               replyEntry=getattr(client, 'last_reply_entry', None), repeatAllowed=True)
             self.observations.append(answer)
-            if answer.get('next', 'continue') == 'continue':
+            navigation = answer.get('next', 'continue')
+            if navigation != 'repeat':
+                if navigation == 'pause':
+                    self.ask(case, attempt, 'paused', 'Observation saved. Resume to start the next step.', ['resume', 'stop'])
+                following = (self.progress() or {}).get('next')
+                self.advance_to = following['id'] if following else None
                 return state
             attempt += 1
 

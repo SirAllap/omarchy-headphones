@@ -98,16 +98,17 @@ class InterviewTests(unittest.TestCase):
     def test_repeat_preserves_uncertainty_and_reestablishes_baseline(self):
         client = FakeDevice()
         flow, ui = self.session(['ready', {'answer': 'unsure', 'text': 'I was distracted', 'next': 'repeat'},
-                                'ready', 'quieter'])
-        flow.control('anc', 'noise.mode', 'anc', client, 'set anc', PROFILE)
+                                'quieter'])
+        with patch('omaphones.interview.time.sleep'):
+            flow.control('anc', 'noise.mode', 'anc', client, 'set anc', PROFILE)
         self.assertEqual(client.commands, [('noise.mode', 'anc'), ('noise.mode', 'off'), ('noise.mode', 'anc')])
         self.assertEqual([a['attempt'] for a in flow.observations], [1, 2])
         self.assertEqual(flow.observations[0]['text'], 'I was distracted')
         self.assertEqual(len({q['requestId'] for q in ui.questions}), len(ui.questions))
 
-    def test_pause_and_skip_send_nothing(self):
+    def test_skip_sends_nothing(self):
         client = FakeDevice()
-        flow, _ = self.session(['pause', 'resume', 'skip'])
+        flow, _ = self.session(['skip'])
         self.assertIsNone(flow.control('anc', 'noise.mode', 'anc', client, '', PROFILE))
         self.assertEqual(client.commands, [])
         self.assertEqual(flow.skipped[0]['stepId'], 'anc')
@@ -238,7 +239,7 @@ class InterviewTests(unittest.TestCase):
             self.assertTrue(result['completed'])
             self.assertEqual(result['finalState']['values']['noise.mode'], 'off')
             self.assertEqual(result['ownerObservations'][0]['channel'], 'assistant-relay')
-            self.assertEqual([q['phase'] for q in questions], ['readiness', 'observation', 'readiness', 'observation'])
+            self.assertEqual([q['phase'] for q in questions], ['readiness', 'observation', 'observation'])
         finally:
             if process.poll() is None: process.kill(); process.wait(timeout=5)
             process.stdin.close(); process.stdout.close(); process.stderr.close()
@@ -255,18 +256,43 @@ class InterviewTests(unittest.TestCase):
         finally:
             os.close(write)
 
-    def test_saving_observation_advances_without_decision_and_keeps_next_step(self):
+    def test_saving_observation_starts_next_control_without_another_ready(self):
         client = FakeDevice()
-        flow, ui = self.session(['ready', 'quieter', 'ready', 'same', 'skip'])
+        flow, ui = self.session(['ready', 'quieter', 'same', 'could-not-perform'])
         result = live.run(PROFILE, self.directory, client, io.StringIO(), implementation='synthetic', interview=flow)
         self.assertEqual([q['phase'] for q in ui.questions],
-                         ['readiness', 'observation', 'readiness', 'observation', 'readiness'])
+                         ['readiness', 'observation', 'observation', 'completion'])
         first, second = ui.questions[1], ui.questions[2]
         self.assertEqual(first['context']['progress']['current']['id'], 'noise.mode:anc')
         self.assertEqual(first['context']['progress']['next']['id'], 'noise.mode:off')
         self.assertEqual(second['context']['progress']['current']['id'], 'noise.mode:off')
         self.assertEqual(second['context']['progress']['steps'][0]['status'], 'completed')
         self.assertEqual(result['ownerObservations'][0]['answer'], 'quieter')
+
+    def test_save_and_pause_waits_then_resume_starts_without_ready(self):
+        client = FakeDevice()
+        def check(q):
+            if q['phase'] == 'paused':
+                self.assertEqual(client.commands, [('noise.mode', 'anc')])
+        flow, ui = self.session(['ready', {'answer': 'quieter', 'next': 'pause'}, 'resume', 'same', 'could-not-perform'], check)
+        live.run(PROFILE, self.directory, client, io.StringIO(), implementation='synthetic', interview=flow)
+        self.assertEqual([q['phase'] for q in ui.questions],
+                         ['readiness', 'observation', 'paused', 'observation', 'completion'])
+
+    def test_stop_during_auto_advance_prevents_the_next_control(self):
+        client = FakeDevice()
+        flow, ui = self.session(['ready', 'quieter'])
+        original = flow.control
+        def controlled(*args):
+            result = original(*args)
+            ui.stopped = True
+            return result
+        flow.control = controlled
+        report = live.run(PROFILE, self.directory, client, io.StringIO(), implementation='synthetic', interview=flow)
+        self.assertFalse(report['passed'])
+        # One test change, then mandatory restoration; no next test or readiness.
+        self.assertEqual(client.commands, [('noise.mode', 'anc'), ('noise.mode', 'off')])
+        self.assertEqual([q['phase'] for q in ui.questions], ['readiness', 'observation'])
 
     def test_plan_marks_failure_and_unrun_steps_before_restoration(self):
         client = FakeDevice(TimeoutError('failed write'))

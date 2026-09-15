@@ -47,8 +47,10 @@ Example answer (copy ids from the actual pending question):
 
 These seven fields are required. A repeatable observation may additionally
 include `"next":"repeat"` to save the answer and repeat the comparison. Omit
-`next` (or use `"continue"`) to save and advance. The pending question advertises
-this with `context.repeatAllowed`. There is no separate decision question. `text` may be empty for choices such as Ready
+`next` (or use `"continue"`) to save and start the next displayed step. Use
+`"next":"pause"` to save and wait for Resume instead. The pending question
+advertises these options with `context.repeatAllowed` and identifies the next
+step in `context.startsNext`. There is no separate decision question. `text` may be empty for choices such as Ready
 or Unsure. Done requires a description of the actual physical action; Observed
 requires the actual observation. Comments are limited to 4000 characters.
 The runner rejects unknown choices, stale ids and a channel mismatch. It assigns
@@ -57,15 +59,18 @@ it does not cryptographically prove human authorship. No default answer is sent.
 
 ## Step behavior and evidence
 
-Readiness → one control → save observation and advance. In the browser, Ready,
-Pause and Resume act immediately; they do not require Save answer as a second
-click. An observation offers **Save & next** and **Save & repeat** on the same
-screen. The first opens the next readiness question, without sending that next
-control until Ready. The second saves the observation, immediately restores the
-comparison baseline, then asks for readiness before replaying the change.
-Pause waits for Resume; Skip leaves the check incomplete. In the terminal,
-`quieter | comment` saves and advances, while `repeat:unsure | comment` saves
-and repeats. JSON uses the optional `next` field above.
+Ready → one control → save observation and start the next displayed step.
+Ready is required at the start. **Save & start next** records the answer and
+starts the next step without another Ready question. At the final comparison,
+**Save & finish** proceeds to restoration. **Save & pause** records the answer
+and waits; Resume starts the next step directly. Ready, Pause and Resume act
+immediately without a second submit click.
+**Save & repeat** keeps the observation, restores the comparison baseline,
+allows two seconds to listen, then repeats automatically. Stop remains available.
+Skip on a readiness question leaves that check incomplete. In the terminal,
+`quieter | comment` saves and starts the next step, `repeat:unsure | comment`
+saves and repeats, and `pause:quieter | comment` saves and pauses. JSON uses
+the optional `next` field above.
 The first attempt uses the current reported state as its baseline. If the state
 changes while waiting, the runner asks again with the new baseline. A physical
 step separately records instruction, completion and independent observation.

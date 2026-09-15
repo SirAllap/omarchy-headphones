@@ -142,9 +142,10 @@
         "next": {
           "enum": [
             "continue",
-            "repeat"
+            "repeat",
+            "pause"
           ],
-          "description": "Optional on repeatable observations; defaults to continue. Saving the answer performs this action without a separate decision question."
+          "description": "Optional on repeatable observations; continue saves and starts the displayed next step, repeat saves and replays after baseline reset, pause saves and waits for Resume."
         }
       },
       "additionalProperties": false

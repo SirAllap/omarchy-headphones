@@ -137,14 +137,15 @@ It must submit only the owner's actual choice and text, with the matching ids.
 Keep the process available for input while waiting; do not start a second tester.
 
 The tester reads initial state before sending control changes. It waits for
-Ready before each control, then asks about that single change. Unsure is valid.
+Ready at the start, then asks about each single change. Unsure is valid.
 The panel shows the current test, the next test and an expandable ordered plan.
-**Save & next** advances directly to the next readiness question; **Save & repeat**
-saves the observation and resets the comparison. No separate Continue page is
-shown. Ready/Pause/Resume act with one click.
-Repeat retains the answer, restores that attempt's comparison baseline, and
-asks for readiness again. Pause stops progression; Skip leaves that check
-incomplete. Restoration is visibly separate from listening observations.
+**Save & start next** records the observation and starts the displayed next step
+without another Ready question. **Save & finish** proceeds to restoration.
+**Save & pause** saves and waits; Resume starts the next step directly.
+**Save & repeat** keeps the answer, restores the comparison baseline, allows
+two seconds to listen, then repeats automatically. Stop remains available.
+Ready/Pause/Resume act with one click. Skip on a readiness question leaves that
+check incomplete. Restoration is visibly separate from listening observations.
 The external mode-change step records the owner's action and observation. It attempts to restore all initial writable
 settings, restoring mode last, including after a failure or interruption.
 `--owner-timeout 180` limits each answer wait (seconds; default 180). Closing

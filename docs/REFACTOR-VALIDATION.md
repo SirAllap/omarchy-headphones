@@ -20,9 +20,9 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
   with revision fingerprint, control results, failure logging and restoration.
 - Contributor instructions and a reusable GitHub message/agent prompt.
 - Structured owner interviews through terminal, JSON lines and an optional local
-  browser panel. Readiness gates individual controls; repeated attempts retain
-  observations and restore a comparison baseline. Saving an answer advances
-  directly; an ordered plan shows the current and next test. Questions/answers are inside
+  browser panel. Initial Ready starts the first control; saving an observation
+  starts the displayed next step without another Ready. Save & pause waits for
+  Resume; Save & repeat restores a baseline and repeats after two seconds; an ordered plan shows the current and next test. Questions/answers are inside
   the existing source CSV checksum boundary.
 - Explicit Pause, Skip, Stop and bounded owner waits; adapter restoration still
   runs when interview logging fails. The assistant remains responsible for its
@@ -32,7 +32,7 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 
 `CHECK_BASE=upstream-baseline tools/check` passed:
 
-- 275 Python tests, including transport callbacks, original pins, native codecs,
+- 277 Python tests, including transport callbacks, original pins, native codecs,
   source-file corruption/loss, provenance and interrupted control restoration.
 - Model.js tests (65 declarations), generated registry/package checks, QML lint
   and Omarchy plugin validation.
@@ -55,7 +55,9 @@ JBL testing is paused. No overall candidate hardware pass is claimed.
 The new interview was verified with synthetic devices and real stdin/stdout
 pipes. Browser QA covered Ready, an uncertain observation with comment, Repeat,
 Stop/restoration, and a completed comparison. Refresh preserved the pending
-question. These UI exercises used no Bluetooth or plugin-setting operations.
+question. The combined save/start path was also verified in the browser: the
+next comparison opens directly, Repeat runs without Ready, and Save & pause
+waits for Resume. These UI exercises used no Bluetooth or plugin-setting operations.
 The new guided path still needs an owner hardware rehearsal; it does not fix
 or mask the two earlier Sony-session failures. General acoustic performance,
 reconnect, battery, wear, charging, peer isolation and candidate QML integration
