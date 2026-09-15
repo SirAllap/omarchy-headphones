@@ -290,6 +290,7 @@
     quieter: "Quieter",
     louder: "Louder",
     same: "No change",
+    different: "Different",
     unsure: "Unsure",
     changed: "Changed",
     continue: "Continue",
@@ -396,10 +397,7 @@
     $("pause-after").hidden = !q.context?.repeatAllowed;
     $("comment").hidden = instant;
     document.querySelector('label[for="comment"]').hidden = instant;
-    $("required").textContent =
-      ["completion"].includes(q.phase) || q.choices.includes("observed")
-        ? "(describe your action or observation)"
-        : "(optional)";
+    $("required").textContent = "(optional)";
     $("choices").replaceChildren();
     for (const choice of q.choices) {
       const b = document.createElement("button");
@@ -407,6 +405,9 @@
       b.setAttribute("aria-pressed", "false");
       b.onclick = () => {
         selected = choice;
+        $("required").textContent = choice === "done" || choice === "observed"
+          ? "(required for this answer)"
+          : "(optional)";
         for (const c of $("choices").children) {
           c.setAttribute("aria-pressed", String(c === b));
         }

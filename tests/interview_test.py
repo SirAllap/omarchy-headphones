@@ -106,6 +106,37 @@ class InterviewTests(unittest.TestCase):
         self.assertEqual(flow.observations[0]['text'], 'I was distracted')
         self.assertEqual(len({q['requestId'] for q in ui.questions}), len(ui.questions))
 
+    def test_different_is_preserved_without_loudness_claim(self):
+        client = FakeDevice()
+        flow, ui = self.session(['ready', 'different'])
+        flow.control('anc', 'noise.mode', 'anc', client, '', PROFILE)
+        self.assertIn('different', ui.questions[-1]['choices'])
+        self.assertEqual(flow.observations[0]['answer'], 'different')
+
+    def test_manual_no_change_is_an_observation_not_a_skip(self):
+        flow, ui = self.session(['ready', ('done', 'Pressed mode button'), 'same'])
+        self.assertTrue(flow.manual('external-change', 'Change mode.'))
+        self.assertEqual(flow.observations[-1]['answer'], 'same')
+        self.assertEqual(flow.skipped, [])
+
+    def test_manual_skip_at_completion_or_observation_is_incomplete(self):
+        for answers in (['ready', 'skip'], ['ready', ('done', 'Pressed mode button'), 'skip']):
+            with self.subTest(answers=answers):
+                flow, ui = self.session(answers)
+                self.assertFalse(flow.manual('external-change', 'Change mode.'))
+                self.assertEqual(flow.skipped[0]['stepId'], 'external-change')
+                self.assertEqual(ui.questions[-1]['phase'], 'completion' if len(answers) == 2 else 'observation')
+
+    def test_skipped_independent_observation_does_not_pass_manual_check(self):
+        client = FakeDevice()
+        flow, ui = self.session(['ready', 'different', 'same', ('done', 'Pressed mode button'), 'skip'])
+        result = live.run(PROFILE, self.directory, client, io.StringIO(), implementation='synthetic', interview=flow)
+        self.assertFalse(result['passed'])
+        self.assertIn('external-change', result['untested'])
+        self.assertNotIn('error', result)
+        self.assertEqual(client.state['values']['noise.mode'], 'off')
+        self.assertTrue(client.closed)
+
     def test_skip_sends_nothing(self):
         client = FakeDevice()
         flow, _ = self.session(['skip'])

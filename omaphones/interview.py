@@ -257,7 +257,7 @@ class Interview:
             state = client.set(command, field, value)
             self.event('observation', 'The device reported the requested value. Listen now.',
                        stepId=case, attempt=attempt)
-            choices = ['quieter', 'louder', 'same', 'unsure', 'stop'] if field == 'noise.mode' else ['changed', 'same', 'unsure', 'stop']
+            choices = ['quieter', 'louder', 'different', 'same', 'unsure', 'stop'] if field == 'noise.mode' else ['changed', 'same', 'unsure', 'stop']
             question = ('Compared with before this change, how does the background sound seem?'
                         if field == 'noise.mode' else 'What did you notice after this control change? Add any details in the comment.')
             answer = self.ask(case, attempt, 'observation', question, choices,
@@ -279,15 +279,18 @@ class Interview:
             return False
         start = self.record('action', 'test-refactor', dict(type='manual-instruction', stepId=step, question=question))
         answer = self.ask(step, 1, 'completion', question + ' Report completion and describe what you actually did.',
-                          ['done', 'could-not-perform', 'stop'], instructionEntry=start)
+                          ['done', 'could-not-perform', 'skip', 'stop'], instructionEntry=start)
         self.record('action' if answer['answer'] == 'done' else 'note', 'owner',
                     {**answer, 'type': 'manual-completion', 'instructionEntry': start})
         if answer['answer'] != 'done':
             self.skipped.append({'stepId': step, 'attempt': 1, 'text': answer['text']})
             return False
-        result = self.ask(step, 1, 'observation', 'What did you independently observe? Describe it in the comment.',
-                          ['observed', 'unsure', 'stop'], instructionEntry=start)
+        result = self.ask(step, 1, 'observation', 'What did you independently observe? Describe an observation, choose No change, or skip this check.',
+                          ['observed', 'same', 'unsure', 'skip', 'stop'], instructionEntry=start)
         self.observations.append(result)
+        if result['answer'] == 'skip':
+            self.skipped.append({'stepId': step, 'attempt': 1, 'text': result['text']})
+            return False
         return True
 
     def close(self):

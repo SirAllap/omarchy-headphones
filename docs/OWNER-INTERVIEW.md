@@ -83,6 +83,12 @@ its original comment. It cannot be rewritten by a later attempt. Schema v1
 covers these question/answer objects; generic status/action records retain their
 own types. The existing seal protects the entire CSV, with no sidecar loophole.
 
+Listening comparisons include **Different** for a change that is neither quieter
+nor louder. Physical completion and independent observation both offer **Skip**;
+a skipped check remains incomplete. **No change** records an actual observation
+without requiring a comment. It does not skip protocol verification or turn a
+missing device reply into success. Done and Observed still require a description.
+
 UI answers are distinct from adapter reports. Unsure is inconclusive. Skipped
 checks make the run incomplete. Protocol `passed` never grants acoustic approval;
 listen comparisons are reported individually and general acoustic performance

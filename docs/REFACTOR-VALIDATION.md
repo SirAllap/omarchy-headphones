@@ -32,7 +32,7 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 
 `CHECK_BASE=upstream-baseline tools/check` passed:
 
-- 278 Python tests, including transport callbacks, original pins, native codecs,
+- 282 Python tests, including transport callbacks, original pins, native codecs,
   source-file corruption/loss, provenance and interrupted control restoration.
 - Model.js tests (65 declarations), generated registry/package checks, QML lint
   and Omarchy plugin validation.
@@ -54,8 +54,12 @@ The JBL run on `faf94d4` failed before its first owner question. Its independent
 capture contains a mode Off notification (packet 8560), but the native GATT
 parser discarded BlueZ's `N bytes` header because it required `N data bytes`.
 The parser now accepts both spellings; a regression test reproduces the old
-failure using that observed reply and a labelled text fixture. A fresh hardware
-run is still required. No overall candidate hardware pass is claimed.
+failure using that observed reply and a labelled text fixture. The subsequent JBL run on `42a560c` passed adapter control checks, external
+mode-change reporting and restoration to Off. Owner uncertainty is retained;
+the later TalkThru comment describes a subtle difference rather than a loudness
+change, exposing the need for a Different choice. Sealing still rejected a
+backward timestamp at packet 3060; original bytes remain intact. No overall
+migration or archive-validation pass is claimed.
 
 The new interview was verified with synthetic devices and real stdin/stdout
 pipes. Browser QA covered Ready, an uncertain observation with comment, Repeat,
