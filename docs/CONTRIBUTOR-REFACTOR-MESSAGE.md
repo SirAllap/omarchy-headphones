@@ -44,8 +44,12 @@ model capabilities or transport settings from another pair of headphones.
 Prepare a new owner session with tools/owner-session. Record firmware (or
 unknown), controller, environment and the candidate revision. Save the existing
 useModeControl setting, release the competing installed mode bridge,
-and start an independent btmon BTSnoop recording before connecting. Keep
-Fast Pair enabled; for GATT use this device's observed model id and BLE address.
+and start an independent btmon BTSnoop recording before connecting. Run btmon
+in the foreground of a persistent interactive terminal (PTY), retain its session
+handle, and authorize startup if required. Stop it with Ctrl+C in that same
+terminal and wait for exit; never detach it or use a separate privileged stop
+command. Confirm this terminal lifecycle is available before capture begins.
+Keep Fast Pair enabled; for GATT use this device's observed model id and BLE address.
 
 Run tools/test-refactor for this model with --interview web if I can use a local
 browser, otherwise --interview json so you can relay its structured questions.

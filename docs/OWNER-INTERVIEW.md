@@ -88,7 +88,10 @@ required question. It stays a failure regardless of earlier owner observations.
 
 The runner restores and closes its adapter on Stop, failed command, input loss
 or owner timeout. The assistant owns btmon and temporary plugin settings and
-must clean those up on every exit. The panel cannot manage arbitrary processes
+must clean those up on every exit. Keep btmon in a persistent foreground PTY
+and stop it with Ctrl+C through its retained terminal handle; do not launch a
+second privileged command to stop it. See OWNER-TESTING.md for the lifecycle.
+The panel cannot manage arbitrary processes
 or change desktop settings. It prints no install instructions and needs no
 additional dependency.
 

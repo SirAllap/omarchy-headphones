@@ -44,10 +44,12 @@ def main():
         result = recording.initialize(directory, owner=args.owner, info=args.info.read_text(),
                                       firmware=args.firmware, scenario=args.scenario, controller=args.controller, root=ROOT, model_id=args.model_id)
         print(json.dumps(result, indent=2))
-        print('Start btmon in another terminal, before connecting the headphones:')
+        print('Start btmon in the foreground of a persistent interactive terminal (PTY), before connecting:')
         import shlex
         print(shlex.join(['btmon', '-i', args.controller, '-w', str(directory / 'traffic.btsnoop')]))
-        print('Bluetooth monitoring needs capture permission; use your system authorization if access is denied.')
+        print('Bluetooth monitoring needs capture permission; authorize this foreground process at startup if needed.')
+        print('Keep its terminal/session handle. Stop with Ctrl+C in that same terminal and wait for exit before sealing.')
+        print('Do not detach the recorder or start a separate privileged process to stop it.')
     elif args.command == 'mark':
         print('Timeline entry:', recording.mark(directory, args.kind, args.actor, args.description))
     elif args.command == 'seal':

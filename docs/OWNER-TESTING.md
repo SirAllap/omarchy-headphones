@@ -61,12 +61,37 @@ tools/owner-session init /tmp/owner-run --owner YOUR_GITHUB_LOGIN \
 ```
 
 For GATT, add `--model-id OBSERVED_ID` at initialization. Disconnect the selected
-headphones if necessary, then start the printed `btmon` command in another
-terminal. It writes **BTSnoop**, independently of our parser and runtime. Leave
+headphones if necessary, then start the printed `btmon` command in the
+foreground of a **persistent interactive terminal (PTY)**. It writes **BTSnoop**, independently of our parser and runtime. Leave
 it running through the session, including connection/setup and the final
 disconnect. Capture the controller hosting the device under test. A capture on
 this computer does not observe a separate phone-to-headphones link; capture on
 the phone as well if that exchange is part of the question being tested.
+
+### Keep the recorder's terminal for cleanup
+
+Launch the recorder with an interactive terminal allocated by the harness
+(for example, `tty: true` in a terminal execution tool). Retain its returned
+terminal/session handle until cleanup is complete. If system authorization is
+needed, authorize the foreground `btmon` process at startup. Redirecting its
+text output to a private log is fine; keep its terminal input attached.
+
+At cleanup, send **Ctrl+C through that same terminal** (ETX byte `0x03`), then
+wait for the foreground recorder to exit and record its exit status. The
+terminal delivers the interrupt to its foreground process group. This does not
+launch a second privileged command or require a separate authorization to stop
+recording. The BTSnoop file is inspected/sealed only after exit is confirmed.
+
+Do not launch the recorder as a detached/background job or with a pipe-only
+execution session. Do not create a cleanup wrapper using `pkexec kill`, a PID
+lookup or another privileged stop command. Keep the recorder handle separate
+from the candidate tester's handle: after the tester finishes, restore its
+settings, complete the capture scenario, and interrupt the recorder's terminal.
+
+If the harness cannot retain an interactive terminal, arrange a foreground
+terminal the owner can stop with Ctrl+C before starting capture. Do not silently
+fall back to a detached recorder. Do not change system authorization rules,
+executable permissions or capabilities to avoid the prompt.
 
 ## 3. Record what you do and what you observe
 
@@ -159,7 +184,9 @@ untested until the candidate QML itself is staged and tested with the owner.
 
 Stop the candidate, restore the previous useModeControl setting, record
 the final device state and completion of your scenario, then stop `btmon` with
-Ctrl+C in its terminal. Do not append to a capture once it has been sealed.
+Ctrl+C in its retained interactive terminal. Wait for its exit and record the
+status before sealing; no separate privileged stop command is needed. Do not
+append to a capture once it has been sealed.
 
 ```bash
 tools/owner-session seal /tmp/owner-run \
