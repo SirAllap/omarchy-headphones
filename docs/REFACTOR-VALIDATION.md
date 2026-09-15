@@ -32,7 +32,7 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 
 `CHECK_BASE=upstream-baseline tools/check` passed:
 
-- 277 Python tests, including transport callbacks, original pins, native codecs,
+- 278 Python tests, including transport callbacks, original pins, native codecs,
   source-file corruption/loss, provenance and interrupted control restoration.
 - Model.js tests (65 declarations), generated registry/package checks, QML lint
   and Omarchy plugin validation.
@@ -50,7 +50,12 @@ The independent Astra-low rehearsal on candidate `d9f1b646` confirmed audible
 Sony mode changes and return to initial ANC. It also reproduced a timeout when
 setting voice focus false in ANC, and sealing rejected backward timestamps in
 the original BTSnoop captures. Both failures and all original bytes are retained.
-JBL testing is paused. No overall candidate hardware pass is claimed.
+The JBL run on `faf94d4` failed before its first owner question. Its independent
+capture contains a mode Off notification (packet 8560), but the native GATT
+parser discarded BlueZ's `N bytes` header because it required `N data bytes`.
+The parser now accepts both spellings; a regression test reproduces the old
+failure using that observed reply and a labelled text fixture. A fresh hardware
+run is still required. No overall candidate hardware pass is claimed.
 
 The new interview was verified with synthetic devices and real stdin/stdout
 pipes. Browser QA covered Ready, an uncertain observation with comment, Repeat,

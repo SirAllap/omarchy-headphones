@@ -284,7 +284,7 @@ class RfcommTransport(StreamTransport):
 
 class GattTransport(Transport):
     ANSI = re.compile(r"\x1b\[[0-9;]*m")
-    NOTIFICATION = re.compile(r"Handle Value Not/Ind: (0x[0-9a-f]+) - \((\d+) data bytes\): ([0-9a-f ]+)", re.I)
+    NOTIFICATION = re.compile(r"Handle Value Not/Ind: (0x[0-9a-f]+) - \((\d+) (?:data )?bytes\): ([0-9a-f ]+)", re.I)
 
     def start(self):
         self.client = None

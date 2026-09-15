@@ -142,6 +142,19 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(s.exit_code, 1)
         self.assertEqual(s.clock.pending, {})
 
+    def test_gatt_bluez_bytes_header_delivers_observed_jbl_reply(self):
+        # BlueZ notify_cb uses "N bytes". Payload observed in owner capture,
+        # JBL run faf94d4 packet 8560; this text rendering is a test fixture.
+        s = JblReplay(); self.addCleanup(s.close)
+        raw = b'\tHandle Value Not/Ind: 0x000c - (10 bytes): aa 91 07 12 01 00 02 00 03 00 \n'
+        for chunk in (raw[:42], raw[42:]):
+            with patch('omaphones.transports.os.read', return_value=chunk):
+                s.transport.readable(-1, s.glib.IO_IN)
+        self.assertEqual(s.lines[-1]['mode'], 'off')
+        s.device('Handle Value Not/Ind: 0x0011 - (10 bytes): aa 91 07 12 01 01 02 00 03 00')
+        s.device('Handle Value Not/Ind: 0x000c - (11 bytes): aa 91 07 12 01 01 02 00 03 00')
+        self.assertEqual(len(s.lines), 1)
+
     def test_rfcomm_channels_keep_order_and_stop_cancels_pending_connect(self):
         class Socket:
             def __init__(self):
