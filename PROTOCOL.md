@@ -990,14 +990,15 @@ screenshot). Where the three differ, both readings are handled below.
 ```
 aeac4a03-dff5-498f-843a-34487cf133eb   NT Link   <- Ear (a) on channel 15; the Ear (2), Ear,
                                                     Ear (stick) and Headphone (1) speak the same
-                                                    protocol, and the CMF Headphone Pro on 28
+                                                    protocol, CMF Headphone Pro on 28, and
+                                                    CMF Buds 2 on 16
 ```
 
 **Opening it.** The bridge opens an `AF_BLUETOOTH` / `BTPROTO_RFCOMM`
 socket directly. Its optional second argument is the name reported by the
 headset, already available to the follower. `MODELS` selects the channel
 before any connect: known legacy Nothing models retain 15 on every retry;
-CMF Headphone Pro uses 28. An unknown name gets `(15, 28)` discovery, while
+CMF Headphone Pro uses 28, and CMF Buds 2 uses 16. An unknown name gets `(15, 28)` discovery, while
 an absent name retains the old channel-15-only call. Matching ignores case,
 outer whitespace and the optional Nothing brand prefix; it does not use a
 user's renamed Alias when the reported name is available.
@@ -1157,6 +1158,18 @@ It is the same protocol as the earbuds, frame for frame; what is model-specific:
   forms parse.
 - The `29` codec flag answered `00` and is left alone, as on the earbuds.
 
+### CMF Buds 2 — RFCOMM channel 16
+
+Read off hardware (`3C:B0:ED:D0:AC:0B`).
+Channels 15 and 28 are refused; channel 16 connects and speaks the Nothing NT Link protocol.
+- **Channel 16**. The SDP record advertises the shared NT Link UUID (`aeac4a03-dff5-498f-843a-34487cf133eb`). The reported name `CMF Buds 2` selects channel 16.
+- **Device info** (`40 06`): ASCII lines returning firmware version (`1.0.1.52`), unlocking queries.
+- **Battery** (`40 07` / `E0 01`): query `40 07` answers left and right components (`02 02 64 03 64`). While the case is opened, unsolicited `E0 01` announcements arrive including component `04` (case battery, e.g. `03 02 64 03 64 04 55` -> case 85%). When the case is closed, subsequent queries omit component `04`, and `nothing-bridge` retains the cached case level with `caseStale: true`.
+- **Noise control** (`40 1E` / `E0 03`): six-byte triplet form `01 <mode> 00 02 <level> 00`. Confirmed for all options: Off (`05`), Ambient/Transparency (`07`), and ANC (`01`–`04`) with levels Low (`03`), Mid (`02`), High (`01`), and Adaptive (`04`). Setting each mode produces an ACK (`70 0F`), an unsolicited `E0 03` state event, and is verified on read-back.
+- **Low latency** (`C0 41` / `40 41`): `01` on, `02` off. Setting `F0 40` payload `01` on / `02` off produces an ACK (`70 40`), an unsolicited `40 41` answer (header `55 20`, sequence `00`), and is verified on read-back.
+- **Reconnect & mode-control**: turning `useModeControl` off terminates `nothing-bridge` and frees RFCOMM channel 16; turning it on reconnects within ~2 seconds and restores state. Bridge process termination triggers clean recovery and reconnect in `DeviceFollower.qml`.
+- **Unavailable & untested**: continuous ambient dial (`ambientLevel` unsupported, discrete mode only), in-ear wear detection (`worn` unsupported on this channel), charging state bits (buds were 100%), multipoint dual-connection isolation, and acoustic tuning remain unobserved/untested on hardware.
+
 ### The probe
 
 [`tools/nothing_probe.py`](tools/nothing_probe.py) — opens the socket, sends
@@ -1169,10 +1182,11 @@ tools/nothing_probe.py 3C:B0:ED:AF:7C:30 set-anc high
 tools/nothing_probe.py 3C:B0:ED:AF:7C:30 set-latency on
 ```
 
-The probe defaults to channel 15 to preserve existing calls. Select 28
-explicitly for CMF (the bridge itself selects by reported model name):
+The probe defaults to channel 15 to preserve existing calls. Select 16 or 28
+explicitly for CMF models (the bridge itself selects by reported model name):
 
 ```bash
+tools/nothing_probe.py --channel 16 3C:B0:ED:D0:AC:0B
 tools/nothing_probe.py --channel 28 2C:BE:EE:3C:6F:FE
 ```
 
