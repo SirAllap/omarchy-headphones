@@ -113,6 +113,10 @@ Keep the process available for input while waiting; do not start a second tester
 
 The tester reads initial state before sending control changes. It waits for
 Ready before each control, then asks about that single change. Unsure is valid.
+The panel shows the current test, the next test and an expandable ordered plan.
+**Save & next** advances directly to the next readiness question; **Save & repeat**
+saves the observation and resets the comparison. No separate Continue page is
+shown. Ready/Pause/Resume act with one click.
 Repeat retains the answer, restores that attempt's comparison baseline, and
 asks for readiness again. Pause stops progression; Skip leaves that check
 incomplete. Restoration is visibly separate from listening observations.

@@ -4,6 +4,9 @@ The same runner supports a local browser panel, a terminal, and JSON lines.
 No AI-provider SDK or browser automation is required to drive the JSON path.
 [JSON Schema](schemas/owner-interview-v1.json) defines questions and answers.
 Other status events and the final result have a `type` field as shown below.
+The panel shows the current test, the next test and an expandable session plan.
+That plan comes from the same ordered controls the runner actually executes;
+skipped, failed and unrun steps retain their distinct statuses.
 
 ## Start
 
@@ -27,7 +30,9 @@ Keep the process alive while the owner responds. Handle these event types:
 - `interview-status`: display its `message` where useful. The restoration phase
   announces settings changes that are not another test. The final status lists
   `cleanupRequired`: stop capture and restore the previous plugin setting.
-- `owner-question`: display `question` and `choices` for its `device`. Forward
+- `owner-question`: display `question` and `choices` for its `device`.
+  `context.progress` names the current/next step and the ordered plan. Status
+  events also carry `progress` during actions, baseline resets and restoration. Forward
   the original ids in the answer. `context` contains the baseline and control;
   an observation question also references the action/reply timeline entries.
 - `input-error`: an answer was rejected; the same question is still pending.
@@ -40,7 +45,10 @@ Example answer (copy ids from the actual pending question):
 {"type":"owner-answer","version":1,"sessionId":"COPY_SESSION_ID","requestId":"COPY_REQUEST_ID","answer":"unsure","text":"I was distracted","channel":"assistant-relay"}
 ```
 
-Use exactly these seven fields. `text` may be empty for choices such as Ready
+These seven fields are required. A repeatable observation may additionally
+include `"next":"repeat"` to save the answer and repeat the comparison. Omit
+`next` (or use `"continue"`) to save and advance. The pending question advertises
+this with `context.repeatAllowed`. There is no separate decision question. `text` may be empty for choices such as Ready
 or Unsure. Done requires a description of the actual physical action; Observed
 requires the actual observation. Comments are limited to 4000 characters.
 The runner rejects unknown choices, stale ids and a channel mismatch. It assigns
@@ -49,9 +57,15 @@ it does not cryptographically prove human authorship. No default answer is sent.
 
 ## Step behavior and evidence
 
-Readiness → one control → observation → Continue / Repeat. Pause waits for
-Resume; Skip leaves the check incomplete. Repeat keeps the original answer,
-restores the original comparison state, then asks for readiness to listen again.
+Readiness → one control → save observation and advance. In the browser, Ready,
+Pause and Resume act immediately; they do not require Save answer as a second
+click. An observation offers **Save & next** and **Save & repeat** on the same
+screen. The first opens the next readiness question, without sending that next
+control until Ready. The second saves the observation, immediately restores the
+comparison baseline, then asks for readiness before replaying the change.
+Pause waits for Resume; Skip leaves the check incomplete. In the terminal,
+`quieter | comment` saves and advances, while `repeat:unsure | comment` saves
+and repeats. JSON uses the optional `next` field above.
 The first attempt uses the current reported state as its baseline. If the state
 changes while waiting, the runner asks again with the new baseline. A physical
 step separately records instruction, completion and independent observation.

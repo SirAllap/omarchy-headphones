@@ -21,7 +21,8 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 - Contributor instructions and a reusable GitHub message/agent prompt.
 - Structured owner interviews through terminal, JSON lines and an optional local
   browser panel. Readiness gates individual controls; repeated attempts retain
-  observations and restore a comparison baseline. Questions/answers are inside
+  observations and restore a comparison baseline. Saving an answer advances
+  directly; an ordered plan shows the current and next test. Questions/answers are inside
   the existing source CSV checksum boundary.
 - Explicit Pause, Skip, Stop and bounded owner waits; adapter restoration still
   runs when interview logging fails. The assistant remains responsible for its
@@ -31,7 +32,7 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 
 `CHECK_BASE=upstream-baseline tools/check` passed:
 
-- 272 Python tests, including transport callbacks, original pins, native codecs,
+- 275 Python tests, including transport callbacks, original pins, native codecs,
   source-file corruption/loss, provenance and interrupted control restoration.
 - Model.js tests (65 declarations), generated registry/package checks, QML lint
   and Omarchy plugin validation.

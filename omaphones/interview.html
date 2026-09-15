@@ -26,14 +26,14 @@
   main {
     max-width: 760px;
     margin: auto;
-    padding: 42px 22px;
+    padding: 22px;
   }
   header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    margin-bottom: 32px;
+    margin-bottom: 18px;
   }
   .brand {
     font-weight: 750;
@@ -53,7 +53,7 @@
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 24px;
-    padding: 34px;
+    padding: 24px;
     box-shadow: 0 12px 50px #17342608;
   }
   .eyebrow {
@@ -66,19 +66,19 @@
     font-weight: 620;
     line-height: 1.25;
     letter-spacing: -.7px;
-    margin: 0 0 26px;
+    margin: 0 0 16px;
   }
   .context {
     white-space: pre-wrap;
     font-size: 14px;
     color: var(--muted);
-    margin: 0 0 20px;
+    margin: 0 0 14px;
   }
   #choices {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    margin: 20px 0;
+    margin: 12px 0;
   }
   button {
     font: inherit;
@@ -86,9 +86,9 @@
     border-radius: 12px;
     background: var(--card);
     color: var(--ink);
-    padding: 13px 19px;
+    padding: 10px 16px;
     cursor: pointer;
-    min-height: 48px;
+    min-height: 44px;
   }
   button:hover {
     border-color: var(--accent);
@@ -117,7 +117,7 @@
     display: block;
     width: 100%;
     resize: vertical;
-    min-height: 90px;
+    min-height: 64px;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--card);
@@ -128,7 +128,7 @@
   #submit {
     background: var(--accent);
     color: white;
-    margin-top: 18px;
+    margin-top: 12px;
     min-width: 160px;
   }
   .footer {
@@ -159,7 +159,53 @@
   [hidden] {
     display: none!important;
   }
+  .now-next {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 0 0 12px;
+    padding: 14px;
+    background: var(--soft);
+    border-radius: 14px;
+  }
+  .now-next small {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    margin-bottom: 5px;
+  }
+  .now-next strong {
+    font-size: 16px;
+    font-weight: 650;
+  }
+  #plan-details {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  #plan-details summary {
+    cursor: pointer;
+  }
+  #plan-list {
+    padding-left: 24px;
+    margin-bottom: 0;
+  }
+  #plan-list li {
+    padding: 4px 0;
+  }
+  #plan-list li[aria-current=step] {
+    color: var(--ink);
+    font-weight: 700;
+  }
+  #repeat {
+    margin: 12px 0 0 8px;
+  }
   @media (max-width:480px) {
+    .now-next {
+      grid-template-columns: 1fr;
+    }
     main {
       padding: 24px 14px;
     }
@@ -194,11 +240,21 @@
   <main>
     <header><span class="brand">Omaphones <span aria-hidden="true">◉</span></span><span class="badge" id="badge">Local owner session</span></header>
     <section aria-labelledby="question">
+      <div id="progress" hidden>
+        <div class="now-next">
+          <div><small id="position">Now</small><strong id="current-test"></strong></div>
+          <div><small>Next</small><strong id="next-test"></strong></div>
+        </div>
+        <details id="plan-details">
+          <summary>Session plan</summary>
+          <ol id="plan-list"></ol>
+        </details>
+      </div>
       <p class="eyebrow" id="step">Connecting to the test runner</p>
       <h1 id="question">Your observations, one step at a time.</h1>
       <p class="context" id="context"></p>
       <div id="form"
-        hidden><div id="choices" role="group" aria-label="Answer choices"></div><label for="comment">Comment <span id="required">(optional)</span></label><textarea id="comment" maxlength="4000" placeholder="Describe what you noticed, including anything you are unsure about."></textarea><button id="submit" disabled>Save answer</button></div>
+        hidden><div id="choices" role="group" aria-label="Answer choices"></div><label for="comment">Comment <span id="required">(optional)</span></label><textarea id="comment" maxlength="4000" placeholder="Describe what you noticed, including anything you are unsure about."></textarea><button id="submit" disabled>Save &amp; next</button><button id="repeat" disabled hidden>Save &amp; repeat</button></div>
       <p class="error" id="error" role="alert"></p>
       <p id="status" role="status"
         aria-live="polite">Keep the headphones nearby. Changes wait for your readiness.</p>
@@ -254,7 +310,36 @@
     if (!r.ok) throw Error(value.error || "Request rejected");
     return value;
   }
+  function renderPlan(plan) {
+    $("progress").hidden = !plan;
+    if (!plan) return;
+    $("position").textContent = plan.index
+      ? "Now · step " + plan.index + " of " + plan.total
+      : "Preparing";
+    $("current-test").textContent = plan.current?.title ||
+      "Read initial device state";
+    $("next-test").textContent = plan.next?.title ||
+      (plan.current ? "End of session" : plan.steps[0]?.title || "—");
+    $("plan-list").replaceChildren();
+    const statusNames = {
+      active: "now",
+      pending: "upcoming",
+      completed: "completed",
+      skipped: "skipped",
+      failed: "failed",
+      interrupted: "interrupted",
+      "not-run": "not run",
+    };
+    for (const step of plan.steps) {
+      const item = document.createElement("li");
+      item.textContent = step.title + " · " +
+        (statusNames[step.status] || step.status);
+      if (step.id === plan.current?.id) item.setAttribute("aria-current", "step");
+      $("plan-list").append(item);
+    }
+  }
   function render(state) {
+    renderPlan(state.question?.context?.progress || state.status.progress);
     $("status").textContent = state.status.message || "";
     if (state.finished) {
       finished = true;
@@ -297,6 +382,15 @@
     $("form").hidden = false;
     $("comment").value = "";
     $("submit").disabled = true;
+    $("repeat").disabled = true;
+    const instant = ["readiness", "paused"].includes(q.phase);
+    $("submit").hidden = instant;
+    $("submit").textContent = q.phase === "observation"
+      ? "Save & next"
+      : "Save answer";
+    $("repeat").hidden = !q.context?.repeatAllowed;
+    $("comment").hidden = instant;
+    document.querySelector('label[for="comment"]').hidden = instant;
     $("required").textContent =
       ["completion"].includes(q.phase) || q.choices.includes("observed")
         ? "(describe your action or observation)"
@@ -312,14 +406,17 @@
           c.setAttribute("aria-pressed", String(c === b));
         }
         $("submit").disabled = false;
+        $("repeat").disabled = false;
+        if (instant || choice === "stop") submitAnswer();
       };
       $("choices").append(b);
     }
   }
-  $("submit").onclick = async () => {
+  async function submitAnswer(next = "continue") {
     if (busy || !current || !selected) return;
     busy = true;
     $("submit").disabled = true;
+    $("repeat").disabled = true;
     try {
       await api("/answer", {
         type: "owner-answer",
@@ -329,6 +426,7 @@
         answer: selected,
         text: $("comment").value,
         channel: "browser",
+        ...(current.context?.repeatAllowed ? { next } : {}),
       });
       $("form").hidden = true;
       current = null;
@@ -336,10 +434,13 @@
     } catch (e) {
       $("error").textContent = e.message;
       $("submit").disabled = false;
+      $("repeat").disabled = false;
     } finally {
       busy = false;
     }
-  };
+  }
+  $("submit").onclick = () => submitAnswer();
+  $("repeat").onclick = () => submitAnswer("repeat");
   $("stop").onclick = async () => {
     try {
       await api("/stop", { stop: true });
@@ -358,6 +459,7 @@
       $("error").textContent =
         "Connection to the runner is unavailable. No answer was submitted. Check the assistant’s report before restarting.";
       $("submit").disabled = true;
+      $("repeat").disabled = true;
     }
     if (!finished) setTimeout(poll, 700);
   }

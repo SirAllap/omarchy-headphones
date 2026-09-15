@@ -138,6 +138,13 @@
             "terminal",
             "assistant-relay"
           ]
+        },
+        "next": {
+          "enum": [
+            "continue",
+            "repeat"
+          ],
+          "description": "Optional on repeatable observations; defaults to continue. Saving the answer performs this action without a separate decision question."
         }
       },
       "additionalProperties": false

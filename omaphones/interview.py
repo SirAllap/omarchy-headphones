@@ -26,8 +26,8 @@ class Stopped(RuntimeError):
 
 def validate_answer(answer, question, channel):
     keys = {'type', 'version', 'sessionId', 'requestId', 'answer', 'text', 'channel'}
-    if not isinstance(answer, dict) or set(answer) != keys:
-        raise ValueError('answer must contain exactly: ' + ', '.join(sorted(keys)))
+    if not isinstance(answer, dict) or not keys <= set(answer) or set(answer) - keys - {'next'}:
+        raise ValueError('answer needs these fields, with optional next: ' + ', '.join(sorted(keys)))
     if (answer['type'] != 'owner-answer' or type(answer['version']) is not int or answer['version'] != 1
             or answer['sessionId'] != question['sessionId'] or answer['requestId'] != question['requestId']):
         raise ValueError('answer does not match the pending question')
@@ -37,6 +37,10 @@ def validate_answer(answer, question, channel):
         raise ValueError('comment must be text of at most 4000 characters')
     if ((question['phase'] == 'completion' and answer['answer'] == 'done') or answer['answer'] == 'observed') and not answer['text'].strip():
         raise ValueError('describe the performed action or actual observation in the comment')
+    if 'next' in answer and (question['phase'] != 'observation'
+            or not question.get('context', {}).get('repeatAllowed')
+            or answer['next'] not in ('continue', 'repeat')):
+        raise ValueError('next is allowed only for a repeatable observation: continue or repeat')
     return answer
 
 
@@ -64,7 +68,9 @@ class Console:
         deadline = time.monotonic() + timeout
         self.notify(question if self.mode == 'json' else {
             'message': '\n%s\n%s\nChoices: %s\nReply with a choice, optionally followed by | your comment.' % (
-                question['device'], question['question'], ' / '.join(question['choices']))})
+                question['device'], question['question'], ' / '.join(question['choices'])) +
+                ('\nTo save this observation and repeat, prefix the choice with repeat: (e.g. repeat:unsure).'
+                 if question.get('context', {}).get('repeatAllowed') else '')})
         while True:
             while b'\n' not in self.buffer and not self.eof:
                 remaining = deadline - time.monotonic()
@@ -84,7 +90,11 @@ class Console:
                     answer = json.loads(line)
                 else:
                     choice, _, comment = line.rstrip('\r\n').partition('|')
-                    answer = make_answer(question, choice.strip(), comment.strip(), self.channel)
+                    choice = choice.strip()
+                    repeat = choice.startswith('repeat:')
+                    answer = make_answer(question, choice.removeprefix('repeat:') if repeat else choice, comment.strip(), self.channel)
+                    if repeat:
+                        answer['next'] = 'repeat'
                 return validate_answer(answer, question, self.channel)
             except (ValueError, TypeError) as error:
                 self.notify({'type': 'input-error', 'message': str(error)})
@@ -103,9 +113,35 @@ class Interview:
         self.device = meta['device']['name']
         self.observations = []
         self.skipped = []
+        self.plan = []
+        self.active_step = None
+        self.outcomes = {}
         self.started = meta['startedMonotonicNs']
         self.event('session', 'Owner interview started', scenarioVersion=1,
                    channel=transport.channel, language='en')
+
+    def configure_plan(self, controls, extra=()):
+        self.plan = [{'id': case, 'title': control_label(field, value)[0].upper() + control_label(field, value)[1:]}
+                     for case, command, field, value in controls]
+        self.plan.extend({'id': key, 'title': title} for key, title in extra)
+        self.plan.append({'id': 'restoration', 'title': 'Restore your original settings'})
+        self.event('plan', 'Session plan is ready.')
+
+    def progress(self):
+        if not self.plan:
+            return None
+        index = next((i for i, step in enumerate(self.plan) if step['id'] == self.active_step), None)
+        return {'index': index + 1 if index is not None else 0, 'total': len(self.plan),
+                'current': self.plan[index] if index is not None else None,
+                'next': self.plan[index + 1] if index is not None and index + 1 < len(self.plan) else None,
+                'steps': [{**step, 'status': self.outcomes.get(step['id'],
+                           'active' if step['id'] == self.active_step else 'pending')} for step in self.plan]}
+
+    def activate(self, step):
+        self.active_step = step
+
+    def complete(self, step, status='completed'):
+        self.outcomes[step] = status
 
     def record(self, kind, actor, obj):
         obj = {'version': 1, **obj, 'sessionId': self.session_id, 'unixNs': time.time_ns(),
@@ -113,13 +149,20 @@ class Interview:
         return recording.mark(self.directory, kind, actor, json.dumps(obj, ensure_ascii=False))
 
     def event(self, phase, message, **fields):
+        if phase == 'restoration':
+            for step in self.plan:
+                if step['id'] != 'restoration' and step['id'] not in self.outcomes:
+                    self.outcomes[step['id']] = 'interrupted' if step['id'] == self.active_step else 'not-run'
+            self.activate('restoration')
         event = dict(type='interview-status', version=1, sessionId=self.session_id,
-                     phase=phase, message=message, **fields)
+                     phase=phase, message=message, progress=self.progress(), **fields)
         entry = self.record('note', 'test-refactor', event)
         self.transport.notify(event)
         return entry
 
     def ask(self, step, attempt, phase, question, choices, **context):
+        self.activate(step)
+        context['progress'] = self.progress()
         request = dict(type='owner-question', version=1, sessionId=self.session_id,
                        requestId=str(uuid.uuid4()), stepId=step, attempt=attempt,
                        phase=phase, device=self.device, language='en', question=question,
@@ -127,11 +170,10 @@ class Interview:
         self.record('note', 'test-refactor', request)
         messages = {'readiness': 'Waiting for your readiness; no test change yet.',
                     'paused': 'Paused. No test actions until you resume.',
-                    'decision': 'Your observation has been saved.',
                     'completion': 'Waiting for your physical action report.'}
         if phase in messages:
             self.transport.notify(dict(type='interview-status', version=1, sessionId=self.session_id,
-                                       phase=phase, message=messages[phase]))
+                                       phase=phase, message=messages[phase], progress=self.progress()))
         try:
             answer = validate_answer(self.transport.ask(request, self.timeout), request, self.transport.channel)
         except BaseException as error:
@@ -167,9 +209,8 @@ class Interview:
         baseline = copy.deepcopy(client.state)
         attempt = 1
         while True:
-            readiness = ('Ready to restore the comparison baseline for a repeat?' if attempt > 1 else
-                         'Listen to the current sound. Ready to change %s?' % control_label(field, value))
-            if not self.ready(case, attempt, readiness,
+            if attempt == 1 and not self.ready(case, attempt,
+                    'Listen to the current sound. Ready to change %s?' % control_label(field, value),
                     baseline=baseline.get('values', {}), control=field, target=value):
                 return None
             if attempt == 1 and hasattr(client, 'refresh'):
@@ -202,11 +243,9 @@ class Interview:
             answer = self.ask(case, attempt, 'observation', question, choices,
                               baseline=baseline.get('values', {}), control=field, target=value,
                               actionEntry=getattr(client, 'last_action_entry', None),
-                              replyEntry=getattr(client, 'last_reply_entry', None))
+                              replyEntry=getattr(client, 'last_reply_entry', None), repeatAllowed=True)
             self.observations.append(answer)
-            decision = self.ask(case, attempt, 'decision', 'Keep this observation and continue, or repeat the comparison?',
-                                ['continue', 'repeat', 'stop'])
-            if decision['answer'] == 'continue':
+            if answer.get('next', 'continue') == 'continue':
                 return state
             attempt += 1
 

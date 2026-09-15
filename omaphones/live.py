@@ -126,12 +126,20 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
         report["initial"] = initial
         report["checks"].append({"case": "initial", "reported": initial, "passed": True})
         ordered = sorted(controls(profile), key=lambda item: item[3] == initial["values"].get(item[2]))
+        if interview is not None:
+            extra = [('external-change', 'Change mode with the headphones or vendor app')]
+            if profile.get('batterySource') == 'bridge':
+                extra.extend(('battery:' + part, 'Read battery: ' + part)
+                             for part in profile['capabilities'].get('battery', {}).get('parts', []))
+            interview.configure_plan(ordered, extra)
         for case, command, field, value in ordered:
             if interview is not None:
                 state = interview.control(case, field, value, client, command, profile)
                 if state is None:
                     report['untested'].append(case)
+                    interview.complete(case, 'skipped')
                     continue
+                interview.complete(case)
             else:
                 state = client.set(command, field, value)
             report["checks"].append({"case": case, "command": command, "reported": state, "passed": True})
@@ -147,8 +155,12 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
             if performed:
                 state = client.wait(lambda s: s.get('values', {}).get('noise.mode') != before.get('noise.mode'), after=serial)
                 report['checks'].append({'case': 'external-change', 'reported': state, 'passed': True})
+                if interview is not None:
+                    interview.complete('external-change')
             else:
                 report['untested'].append('external-change')
+                if interview is not None:
+                    interview.complete('external-change', 'skipped')
             if interview is None:
                 client.process.stdin.write(json.dumps({'apiVersion': 1, 'control': 'unavailable.control', 'value': True}) + '\n')
                 client.process.stdin.flush()
@@ -161,15 +173,23 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
             if profile.get("batterySource") != "bridge":
                 report["untested"].append("battery:" + part)
                 continue
+            if interview is not None:
+                interview.activate('battery:' + part)
+                interview.event('action', 'Reading the battery report.')
             state = client.wait(lambda s: type(s.get("values", {}).get("battery", {}).get(part)) is int
                                 and 0 <= s["values"]["battery"][part] <= 100)
             report["checks"].append({"case": "battery:" + part, "reported": state, "passed": True})
+            if interview is not None:
+                interview.complete("battery:" + part)
         if "wear.detected" in profile["capabilities"]:
             report["untested"].extend(("wear.detected:true", "wear.detected:false"))
         report["passed"] = not (interview is not None and interview.skipped)
         if interview is not None and interview.skipped:
             report["incompleteReason"] = "owner skipped one or more checks"
     except BaseException as error:
+        if interview is not None and interview.active_step:
+            from .interview import Stopped
+            interview.complete(interview.active_step, 'interrupted' if isinstance(error, (Stopped, KeyboardInterrupt)) else 'failed')
         report["error"] = type(error).__name__ + ": " + str(error)
     finally:
         if interview is not None:
@@ -194,6 +214,9 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
                     report["passed"] = False
         else:
             report["restoration"] = [{"passed": False, "error": "initial state unknown; no controls sent"}]
+        if interview is not None:
+            restored = bool(report['restoration']) and all(item['passed'] for item in report['restoration'])
+            interview.complete('restoration', 'completed' if restored else 'failed')
         if getattr(client, 'log_errors', []):
             report['passed'] = False
             report['timelineErrors'] = client.log_errors

@@ -39,16 +39,23 @@ def main():
         device = Fake()
         result = {'synthetic': True, 'scope': 'UI demonstration; no hardware operations'}
         try:
-            state = session.control('noise.mode:anc', 'noise.mode', 'anc', device,
-                                    '{"control":"noise.mode","value":"anc"}',
-                                    {'capabilities': {'noise.mode': {'values': ['off', 'anc']}}})
-            result['completed'] = state is not None
+            cases = [('noise.mode:' + value, json.dumps({'control': 'noise.mode', 'value': value}), 'noise.mode', value)
+                     for value in ('anc', 'ambient')]
+            session.configure_plan(cases)
+            result['completed'] = True
+            for case, command, field, value in cases:
+                state = session.control(case, field, value, device, command,
+                                        {'capabilities': {'noise.mode': {'values': ['off', 'anc', 'ambient']}}})
+                session.complete(case, 'completed' if state is not None else 'skipped')
+                result['completed'] &= state is not None
         except interview.Stopped as error:
+            session.complete(session.active_step, 'interrupted')
             result.update(completed=False, error=str(error))
         finally:
             session.event('restoration', 'Simulation: restoring the original Off setting.')
             device.set('', 'noise.mode', 'off')
             result.update(ownerObservations=session.observations, finalState=device.state)
+            session.complete('restoration')
             session.event('finished', 'Simulation finished. No hardware was used.')
             session.close()
         print(json.dumps({'type': 'test-result', 'version': 1, 'report': result}), flush=True)

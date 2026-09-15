@@ -31,6 +31,9 @@ class Scripted:
         if self.on_question: self.on_question(question)
         choice = next(self.answers)
         if isinstance(choice, BaseException): raise choice
+        if isinstance(choice, dict):
+            response = interview.make_answer(question, choice['answer'], choice.get('text', ''), self.channel)
+            return {**response, **({'next': choice['next']} if 'next' in choice else {})}
         if isinstance(choice, tuple): choice, text = choice
         else: text = ''
         return interview.make_answer(question, choice, text, self.channel)
@@ -76,7 +79,7 @@ class InterviewTests(unittest.TestCase):
             if question['phase'] == 'readiness': self.assertEqual(client.commands, [])
             if question['phase'] in ('observation', 'decision'):
                 self.assertEqual(client.commands, [('noise.mode', 'anc')])
-        flow, ui = self.session(['ready', 'quieter', 'continue'], check)
+        flow, ui = self.session(['ready', 'quieter'], check)
         result = flow.control('anc', 'noise.mode', 'anc', client, 'set anc', PROFILE)
         self.assertEqual(result['values']['noise.mode'], 'anc')
         self.assertEqual(len(flow.observations), 1)
@@ -94,8 +97,8 @@ class InterviewTests(unittest.TestCase):
 
     def test_repeat_preserves_uncertainty_and_reestablishes_baseline(self):
         client = FakeDevice()
-        flow, ui = self.session(['ready', ('unsure', 'I was distracted'), 'repeat',
-                                'ready', 'ready', 'quieter', 'continue'])
+        flow, ui = self.session(['ready', {'answer': 'unsure', 'text': 'I was distracted', 'next': 'repeat'},
+                                'ready', 'quieter'])
         flow.control('anc', 'noise.mode', 'anc', client, 'set anc', PROFILE)
         self.assertEqual(client.commands, [('noise.mode', 'anc'), ('noise.mode', 'off'), ('noise.mode', 'anc')])
         self.assertEqual([a['attempt'] for a in flow.observations], [1, 2])
@@ -225,7 +228,7 @@ class InterviewTests(unittest.TestCase):
                 event = json.loads(line)
                 if event['type'] == 'owner-question':
                     questions.append(event)
-                    choice = {'readiness': 'ready', 'observation': 'unsure', 'decision': 'continue'}[event['phase']]
+                    choice = {'readiness': 'ready', 'observation': 'unsure'}[event['phase']]
                     answer = interview.make_answer(event, choice, 'Synthetic relay check', 'assistant-relay')
                     process.stdin.write(json.dumps(answer) + '\n'); process.stdin.flush()
                 elif event['type'] == 'test-result':
@@ -235,7 +238,7 @@ class InterviewTests(unittest.TestCase):
             self.assertTrue(result['completed'])
             self.assertEqual(result['finalState']['values']['noise.mode'], 'off')
             self.assertEqual(result['ownerObservations'][0]['channel'], 'assistant-relay')
-            self.assertEqual([q['phase'] for q in questions], ['readiness', 'observation', 'decision'])
+            self.assertEqual([q['phase'] for q in questions], ['readiness', 'observation', 'readiness', 'observation'])
         finally:
             if process.poll() is None: process.kill(); process.wait(timeout=5)
             process.stdin.close(); process.stdout.close(); process.stderr.close()
@@ -251,6 +254,47 @@ class InterviewTests(unittest.TestCase):
                     ui.ask(q, .01)
         finally:
             os.close(write)
+
+    def test_saving_observation_advances_without_decision_and_keeps_next_step(self):
+        client = FakeDevice()
+        flow, ui = self.session(['ready', 'quieter', 'ready', 'same', 'skip'])
+        result = live.run(PROFILE, self.directory, client, io.StringIO(), implementation='synthetic', interview=flow)
+        self.assertEqual([q['phase'] for q in ui.questions],
+                         ['readiness', 'observation', 'readiness', 'observation', 'readiness'])
+        first, second = ui.questions[1], ui.questions[2]
+        self.assertEqual(first['context']['progress']['current']['id'], 'noise.mode:anc')
+        self.assertEqual(first['context']['progress']['next']['id'], 'noise.mode:off')
+        self.assertEqual(second['context']['progress']['current']['id'], 'noise.mode:off')
+        self.assertEqual(second['context']['progress']['steps'][0]['status'], 'completed')
+        self.assertEqual(result['ownerObservations'][0]['answer'], 'quieter')
+
+    def test_plan_marks_failure_and_unrun_steps_before_restoration(self):
+        client = FakeDevice(TimeoutError('failed write'))
+        flow, ui = self.session(['ready'])
+        live.run(PROFILE, self.directory, client, io.StringIO(), implementation='synthetic', interview=flow)
+        status = next(e for e in ui.events if e['phase'] == 'restoration')
+        self.assertEqual(status['progress']['current']['id'], 'restoration')
+        self.assertIsNone(status['progress']['next'])
+        outcomes = {s['id']: s['status'] for s in status['progress']['steps']}
+        self.assertEqual(outcomes['noise.mode:anc'], 'failed')
+        self.assertEqual(outcomes['noise.mode:off'], 'not-run')
+        self.assertEqual(outcomes['external-change'], 'not-run')
+
+    def test_repeat_navigation_validated_and_terminal_uses_same_question(self):
+        q = dict(sessionId='s', requestId='r', phase='observation', device='synthetic',
+                 question='What changed?', choices=['unsure'], context={'repeatAllowed': True})
+        answer = {**interview.make_answer(q, 'unsure', '', 'terminal'), 'next': 'repeat'}
+        interview.validate_answer(answer, q, 'terminal')
+        for change in [{'phase': 'readiness'}, {'context': {} }]:
+            with self.assertRaises(ValueError): interview.validate_answer(answer, {**q, **change}, 'terminal')
+        with self.assertRaises(ValueError): interview.validate_answer({**answer, 'next': 'unknown'}, q, 'terminal')
+        read, write = os.pipe()
+        os.write(write, b'repeat:unsure | distracted\n'); os.close(write)
+        with os.fdopen(read) as source:
+            response = interview.Console('terminal', source, io.StringIO()).ask(q, .1)
+        self.assertEqual(response['next'], 'repeat')
+        self.assertEqual(response['answer'], 'unsure')
+        self.assertEqual(response['text'], 'distracted')
 
     def test_invalid_timeout_rejected(self):
         for timeout in [0, -1, float('nan'), float('inf')]:
