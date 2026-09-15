@@ -141,6 +141,7 @@ def readiness(directory, root=profiles.ROOT):
         return 'pure Protocol; transport managed by shared host'
 
     check("adapter", adapter)
+    check("independent source recording", lambda: replay.independent_source(profile, directory))
     checked = check("capture and replay", lambda: sorted(replay.verify(profile, directory, root)))
     if checked is not None:
         missing = sorted(replay.required_cases(profile) - set(checked))

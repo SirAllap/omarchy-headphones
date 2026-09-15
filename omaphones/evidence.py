@@ -46,6 +46,35 @@ def capture(path, profile):
     return events
 
 
+def independent_source(profile, directory):
+    from . import owner_recording
+    source = directory / 'source-session'
+    summary = owner_recording.verify(source)
+    metadata = owner_recording.read_json(source / 'session.json')
+    if metadata['owner'] != profile['owner'] or not devices.matches(profile, {
+            **metadata['device'], 'modelId': metadata.get('modelId', '')}):
+        raise ValueError('independent source must identify this model and owner')
+    events = capture(directory / 'capture.jsonl', profile)
+    source_hash = owner_recording.digest(source / 'traffic.btsnoop')
+    wire_events = [event for event in events.values() if event['direction'] in ('rx', 'tx')]
+    selected = owner_recording.selected_packets(source, [part for event in wire_events for part in event.get('source', {}).get('slices', [])])
+    previous = {'rx': (0, 0), 'tx': (0, 0)}
+    for event in events.values():
+        if event['direction'] not in ('rx', 'tx'):
+            continue
+        ref = event.get('source', {})
+        if ref.get('sha256') != source_hash:
+            raise ValueError('RX/TX event %s needs the BTSnoop source hash and reviewed packet slices' % event['id'])
+        wire = owner_recording.slice_bytes(selected, ref.get('slices', []), event['direction'])
+        for number, offset, length in ref['slices']:
+            if (number, offset) < previous[event['direction']]:
+                raise ValueError('RX/TX source bytes were reused or reordered at event ' + event['id'])
+            previous[event['direction']] = (number, offset + length)
+        if wire != bytes.fromhex(event['data']):
+            raise ValueError('RX/TX event %s differs from its independent source' % event['id'])
+    return '%d source packets; all replay RX/TX bytes have checked provenance' % summary['packets']
+
+
 def writable_cases(profile):
     out = {}
     for key, spec in profile['capabilities'].items():

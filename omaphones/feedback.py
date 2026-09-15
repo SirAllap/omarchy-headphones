@@ -7,6 +7,7 @@ HELP = {
     'existing models': ('device.json', 'Remove the overlapping identity. Keep existing owner models on their current route.'),
     'identification': ('identity.txt', 'Save complete bluetoothctl info for this device and match its reported name and UUIDs.'),
     'adapter': ('device.json', 'Fill observed parameters and transport endpoints; keep OS operations in the shared host.'),
+    'independent source recording': ('source-session/manifest.json', 'Retain BTSnoop and the owner timeline, seal with tools/owner-session, and reference reviewed packet slices from every RX/TX event. See docs/OWNER-TESTING.md.'),
     'capture and replay': ('session.json', 'Compare the failing step with capture.jsonl. Fix protocol parsing or the independently reviewed expectation; never rewrite raw replies to match code.'),
     'capability evidence': ('session.json', 'Record the missing cases on this model, then add RX-backed expectations and case labels.'),
     'command round trips': ('capture.jsonl', 'Record every declared control value and its device reply. Initial or cached state alone does not confirm a request.'),

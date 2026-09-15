@@ -165,6 +165,14 @@ HCI packets or proof of over-the-air delivery.
 
 ## Owner workflow
 
+For the refactor validation campaign and independent BTSnoop recordings, start
+with [Owner testing](OWNER-TESTING.md). `tools/test-refactor` runs an existing
+model's candidate codec explicitly without changing installed routing. New
+device packages also retain a sealed `source-session/` bundle and attach checked
+BTSnoop packet references to each derived replay RX/TX event. Internal JSONL
+alone is not the independent archival source. Historical owner evidence remains
+unchanged.
+
 Work in an isolated checkout. Release the competing mode bridge before any
 probe or live run, and restore its setting afterwards.
 

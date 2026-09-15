@@ -79,6 +79,9 @@
     "wear": {
       "type": "boolean",
       "required": true
+    },
+    "noModes": {
+      "type": "boolean"
     }
   },
   "referenceModels": {
@@ -112,6 +115,15 @@
       },
       "parameters": {
         "wear": false
+      }
+    },
+    "WH-CH520": {
+      "match": {
+        "name": "WH-CH520"
+      },
+      "parameters": {
+        "wear": false,
+        "noModes": true
       }
     }
   },

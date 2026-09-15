@@ -122,17 +122,40 @@ def select(uuids, ble_address="", root=ROOT):
     return ""
 
 
+def reference_model(row, context):
+    context = dict(context)
+    if row['id'] == 'nothing':
+        context['name'] = context.get('name', '').strip().casefold().removeprefix('nothing ')
+    if row['id'] == 'soundcore':
+        context['uuid'] = next((u.lower() for u in context.get('uuids', [])
+                                if u.lower().startswith(row['match']['uuidPrefix'])), context.get('uuid', '').lower())
+    return next((ref for ref in row.get('referenceModels', {}).values()
+                 if all(context.get(k) == v for k, v in ref['match'].items())), None)
+
+
 def model_parameters(row, context, root=ROOT):
     # Private migration references for replaying frozen old pins. New packages
     # are resolved explicitly by devices.resolve, never by a model fallback.
-    for ref in row.get("referenceModels", {}).values():
-        if all(context.get(k) == v for k, v in ref["match"].items()):
-            return ref["parameters"]
+    ref = reference_model(row, context)
+    if ref:
+        return ref['parameters']
     return row.get("namelessModel", row.get("unknownModel", {})) if not context.get("name") else row.get("unknownModel", {})
 
 
 def transport_for(row, context, root=ROOT):
-    return dict(row["transport"])
+    transport = dict(row['transport'])
+    ref = reference_model(row, context)
+    if ref:
+        transport.update(ref.get('transport', {}))
+    elif not context.get('name', '').strip():
+        transport.update(row.get('namelessTransport', {}))
+    if row['id'] == 'soundcore':
+        uuid = next((u.lower() for u in context.get('uuids', [])
+                     if u.lower().startswith(row['match']['uuidPrefix'])), context.get('uuid', '').lower())
+        if uuid.startswith(row['match']['uuidPrefix']) and UUID.fullmatch(uuid):
+            transport['uuidPreference'] = [uuid]
+    validate_transport(transport)
+    return transport
 
 
 def instantiate(path, parameters):

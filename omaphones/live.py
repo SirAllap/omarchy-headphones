@@ -108,12 +108,14 @@ def restore_actions(profile, initial):
     return [(json.dumps({"apiVersion": 1, "control": key, "value": initial["values"][key]}), key, initial["values"][key]) for key in keys]
 
 
-def run(profile, directory, client, output, root=profiles.ROOT, prompt=None):
+def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, implementation=None):
     report = {"apiVersion": 1, "device": profile["id"], "owner": profile["owner"],
               "time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              "implementation": profiles.implementation_hash(profile, directory, root),
+              "implementation": implementation or profiles.implementation_hash(profile, directory, root),
               "scope": "adapter", "checks": [], "restoration": [], "passed": False,
               "untested": ["shell-integration", "reconnect", "peer-isolation", "charging", "acoustics"]}
+    if prompt is None:
+        report['untested'].extend(('external-change', 'repeated', 'unsupported-command'))
     initial = None
     try:
         initial = client.wait(lambda state: initial_ready(profile, state))

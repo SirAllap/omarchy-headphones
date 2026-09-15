@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Keep BTSnoop evidence and an independent timeline of owner actions."""
+import argparse
+import json
+from pathlib import Path
+import sys
+
+sys.dont_write_bytecode = True
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from omaphones import owner_recording as recording
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    init = sub.add_parser('init', help='create a new session before starting btmon')
+    init.add_argument('directory', type=Path)
+    init.add_argument('--owner', required=True)
+    init.add_argument('--info', type=Path, required=True, help='complete bluetoothctl info output')
+    init.add_argument('--firmware', required=True, help='observed firmware, or unknown')
+    init.add_argument('--scenario', required=True)
+    init.add_argument('--controller', required=True, help='capture controller, for example hci0')
+    init.add_argument('--model-id', default='', help='observed Fast Pair model id, required for GATT evidence')
+    mark = sub.add_parser('mark', help='timestamp an action, observation, failure or note now')
+    mark.add_argument('directory', type=Path)
+    mark.add_argument('kind', choices=sorted(recording.KINDS))
+    mark.add_argument('description')
+    mark.add_argument('--actor', default='owner', help='owner, vendor-app, test-refactor, etc.')
+    seal = sub.add_parser('seal', help='after stopping btmon, validate and freeze source checksums')
+    seal.add_argument('directory', type=Path)
+    seal.add_argument('--notes', required=True, help='completed scenario, limits and omissions')
+    check = sub.add_parser('check', help='verify sealed file integrity; does not approve hardware')
+    check.add_argument('directory', type=Path)
+    index = sub.add_parser('packets', help='print every BTSnoop record, including opaque payloads')
+    index.add_argument('directory', type=Path)
+    extract = sub.add_parser('extract', help='derive bytes from reviewed packet slices')
+    extract.add_argument('directory', type=Path)
+    extract.add_argument('--direction', required=True, choices=('rx', 'tx'))
+    extract.add_argument('--slice', action='append', required=True, help='packet:offset:length; may repeat')
+    args = parser.parse_args()
+    directory = args.directory.resolve()
+    if args.command == 'init':
+        result = recording.initialize(directory, owner=args.owner, info=args.info.read_text(),
+                                      firmware=args.firmware, scenario=args.scenario, controller=args.controller, root=ROOT, model_id=args.model_id)
+        print(json.dumps(result, indent=2))
+        print('Start btmon in another terminal, before connecting the headphones:')
+        import shlex
+        print(shlex.join(['btmon', '-i', args.controller, '-w', str(directory / 'traffic.btsnoop')]))
+        print('Bluetooth monitoring needs capture permission; use your system authorization if access is denied.')
+    elif args.command == 'mark':
+        print('Timeline entry:', recording.mark(directory, args.kind, args.actor, args.description))
+    elif args.command == 'seal':
+        print(json.dumps(recording.seal(directory, args.notes), indent=2))
+    elif args.command == 'check':
+        print(json.dumps(recording.verify(directory), indent=2))
+    elif args.command == 'packets':
+        for packet in recording.packets(directory / 'traffic.btsnoop'):
+            print(json.dumps({**packet, 'data': packet['data'].hex()}))
+    else:
+        slices = [[int(v) for v in spec.split(':')] for spec in args.slice]
+        wire = recording.extract(directory, slices, args.direction)
+        print(json.dumps({'encoding': 'hex', 'direction': args.direction, 'data': wire.hex(' '),
+                          'source': {'slices': slices, 'sha256': recording.digest(directory / 'traffic.btsnoop')}}, indent=2))
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        print('owner-session:', error, file=sys.stderr)
+        sys.exit(1)

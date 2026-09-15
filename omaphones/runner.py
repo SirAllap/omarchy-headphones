@@ -43,6 +43,7 @@ def main(argv=None):
     parser.add_argument("--device")
     parser.add_argument("--allow-draft", action="store_true")
     parser.add_argument("--capture", type=Path)
+    parser.add_argument("--owner", help="owner of an explicit migration test recording")
     parser.add_argument("--context", required=True, help="JSON device identity, never shell text")
     args = parser.parse_args(argv)
     try:
@@ -98,12 +99,13 @@ def main(argv=None):
     transport = TRANSPORTS[transport_config["kind"]](transport_config, context, GLib)
     recorder = None
     if args.capture:
-        if not profile:
-            emit({"modes": False, "error": "capture needs an exact device package"})
-            return 4
         try:
-            recorder = Recorder(args.capture, {"apiVersion": 1, "device": profile["id"], "owner": profile["owner"],
-                "context": context, "implementation": devices.implementation_hash(profile, directory),
+            if not profile and (not args.owner or not re.fullmatch(r'[A-Za-z0-9-]+', args.owner) or not context.get('name')):
+                raise ValueError('migration recording needs --owner and an exact device name')
+            from omaphones.owner_recording import revision
+            recorder = Recorder(args.capture, {"apiVersion": 1, "device": profile["id"] if profile else args.adapter,
+                "owner": profile["owner"] if profile else args.owner, "context": context,
+                "implementation": devices.implementation_hash(profile, directory) if profile else revision(devices.ROOT)['codeSha256'],
                 "boundary": "gatt-notification/client-command-payload" if transport_config["kind"] == "ble-gatt" else "stream"})
             transport.record = recorder.record
         except (ValueError, OSError) as error:

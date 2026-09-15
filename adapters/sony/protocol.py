@@ -375,6 +375,8 @@ class Adapter(Protocol):
         if payload[0] == CONNECT_RET_PROTOCOL_INFO:
             if not self.protocol_seen:
                 self.protocol_seen = True
+                if self.model.get("noModes", False):
+                    return self.finish(EXIT_UNSUPPORTED, "no ANC/Ambient on this model (confirmed on hardware; see PROTOCOL.md)")
                 self.order_candidates(len(payload))
                 self.probe(0)
                 # Wearing status is never volunteered at connect the way NCASM's

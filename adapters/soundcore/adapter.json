@@ -82,5 +82,25 @@
     "connectRetry": 1500,
     "connectDelay": 500,
     "connectTimeout": 30
+  },
+  "referenceModels": {
+    "d1402": {
+      "match": {
+        "uuid": "0cf12d31-fac3-4553-bd80-d6832e7d1402"
+      },
+      "parameters": {
+        "offset": 71,
+        "query": false
+      }
+    },
+    "b3062": {
+      "match": {
+        "uuid": "0cf12d31-fac3-4553-bd80-d6832e7b3062"
+      },
+      "parameters": {
+        "offset": 69,
+        "query": true
+      }
+    }
   }
 }

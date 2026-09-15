@@ -76,5 +76,90 @@
   },
   "namelessModel": {
     "defaultAncLevel": "adaptive"
+  },
+  "referenceModels": {
+    "ear (a)": {
+      "match": {
+        "name": "ear (a)"
+      },
+      "parameters": {
+        "defaultAncLevel": "adaptive"
+      },
+      "transport": {
+        "channels": [
+          15
+        ]
+      }
+    },
+    "ear": {
+      "match": {
+        "name": "ear"
+      },
+      "parameters": {
+        "defaultAncLevel": "adaptive"
+      },
+      "transport": {
+        "channels": [
+          15
+        ]
+      }
+    },
+    "ear (2)": {
+      "match": {
+        "name": "ear (2)"
+      },
+      "parameters": {
+        "defaultAncLevel": "adaptive"
+      },
+      "transport": {
+        "channels": [
+          15
+        ]
+      }
+    },
+    "ear (stick)": {
+      "match": {
+        "name": "ear (stick)"
+      },
+      "parameters": {
+        "defaultAncLevel": "adaptive"
+      },
+      "transport": {
+        "channels": [
+          15
+        ]
+      }
+    },
+    "headphone (1)": {
+      "match": {
+        "name": "headphone (1)"
+      },
+      "parameters": {
+        "defaultAncLevel": "adaptive"
+      },
+      "transport": {
+        "channels": [
+          15
+        ]
+      }
+    },
+    "cmf headphone pro": {
+      "match": {
+        "name": "cmf headphone pro"
+      },
+      "parameters": {
+        "defaultAncLevel": "adaptive"
+      },
+      "transport": {
+        "channels": [
+          28
+        ]
+      }
+    }
+  },
+  "namelessTransport": {
+    "channels": [
+      15
+    ]
   }
 }
