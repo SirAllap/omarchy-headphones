@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Omaphones owner interview request and answer v1",
+  "description": "Wire messages and timestamped question/answer records in actions.csv. Runtime additionally checks pending request, allowed choice, channel, and required description. Other timeline status records are outside this schema.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/question"
+    },
+    {
+      "$ref": "#/$defs/answer"
+    }
+  ],
+  "$defs": {
+    "question": {
+      "type": "object",
+      "required": [
+        "type",
+        "version",
+        "sessionId",
+        "requestId",
+        "stepId",
+        "attempt",
+        "phase",
+        "device",
+        "language",
+        "question",
+        "choices",
+        "context"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stepId": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "type": "string"
+        },
+        "unixNs": {
+          "type": "integer"
+        },
+        "elapsedNs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "const": "owner-question"
+        },
+        "device": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "context": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "answer": {
+      "type": "object",
+      "required": [
+        "type",
+        "version",
+        "sessionId",
+        "requestId",
+        "answer",
+        "text",
+        "channel"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stepId": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "type": "string"
+        },
+        "unixNs": {
+          "type": "integer"
+        },
+        "elapsedNs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "const": "owner-answer"
+        },
+        "answer": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "channel": {
+          "enum": [
+            "browser",
+            "terminal",
+            "assistant-relay"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

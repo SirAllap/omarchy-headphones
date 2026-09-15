@@ -18,6 +18,8 @@ assembles the return archive and draft reply. It gathers information available
 on the machine before asking the owner. It asks the owner one short question or
 physical action at a time and handles terminal input for the test tool using
 the owner's actual responses. It never supplies an observation on their behalf.
+The shared interview records the exact question, answer, attempt and timestamps.
+Use the browser panel when available, or JSON relay for an assistant-led chat.
 
 The owner has the headphones nearby, presses buttons, handles the case or
 charging cable, performs app actions the assistant cannot access, and reports
@@ -90,7 +92,7 @@ never as an owner's physical observation.
 ## 4. Run the candidate adapter
 
 ```bash
-tools/test-refactor --adapter sony --session /tmp/owner-run
+tools/test-refactor --adapter sony --session /tmp/owner-run --interview web
 ```
 
 Choose the applicable adapter: `sony`, `jbl`, `samsung`, `xiaomi`, `oppo`, `bose`,
@@ -99,16 +101,47 @@ and `--model-id OBSERVED_ID`. Re-read the BLE address after reconnecting; it can
 rotate. `--automatic` runs control checks without prompting for physical
 actions and leaves those checks explicitly untested.
 
-The tester reads initial state before sending control changes, exercises
-observed writable values, prompts for an external mode change and records your
-description and observation. It attempts to restore all initial writable
+Choose `--interview web`, `--interview terminal` (default), or `--interview json`.
+The browser URL is printed on stderr; open it in a local browser on the Bluetooth
+host. The panel has no remote service or additional runtime dependency. The
+terminal accepts `choice | optional comment`. JSON mode emits one object per
+line on stdout and accepts one response object per line on stdin. See the
+[interview protocol](OWNER-INTERVIEW.md) and its schema. The assistant may render
+each pending JSON question using its own question tool or relay it in chat.
+It must submit only the owner's actual choice and text, with the matching ids.
+Keep the process available for input while waiting; do not start a second tester.
+
+The tester reads initial state before sending control changes. It waits for
+Ready before each control, then asks about that single change. Unsure is valid.
+Repeat retains the answer, restores that attempt's comparison baseline, and
+asks for readiness again. Pause stops progression; Skip leaves that check
+incomplete. Restoration is visibly separate from listening observations.
+The external mode-change step records the owner's action and observation. It attempts to restore all initial writable
 settings, restoring mode last, including after a failure or interruption.
+`--owner-timeout 180` limits each answer wait (seconds; default 180). Closing
+input, an idle timeout or Stop ends the test as incomplete and restores the
+adapter settings. Browser disconnect is noticed at the next question and has a
+90-second grace period for reopening the page. The current device operation is
+bounded by its existing timeout; Stop takes effect after it returns.
+
+The assistant still owns the independent btmon process and the temporary plugin
+setting. On **every** test exit, including timeout and UI loss, it must stop the
+capture, restore the original `useModeControl` setting and report the outcome.
+The tester does not own those external processes/settings and cannot claim to
+have cleaned them up. Its final `cleanupRequired` status names both actions.
 If restoration fails, use the original controls/app to restore the settings and
 record what happened. Never overwrite a failed run with a successful one.
 
 WH-CH520 is a battery-only exception: the candidate confirms that mode control
 remains unavailable, and sends no ANC/wear queries after the handshake. Its
 battery still needs a separate observation of the Fast Pair/BlueZ path.
+
+Per-attempt answers appear in `adapter-result.json` as `ownerObservations`;
+structured question/answer records also live in `actions.csv`, inside the
+existing source checksum boundary. Protocol `passed` is not acoustic approval.
+General acoustic performance remains untested; each recorded comparison is
+available separately, including uncertainty. Guided runs leave repeated-report
+and unsupported-command verification untested until dedicated assertions exist.
 
 Keep explicit manual results for reconnect, battery, wear when supported,
 charging, acoustic effects and peer isolation. Mark each `passed`, `failed`,

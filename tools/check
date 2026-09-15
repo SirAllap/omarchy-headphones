@@ -26,7 +26,7 @@ bridges=$(ls ./*-bridge)
 # ---- Python parses. ast rather than py_compile, which writes __pycache__.
 if out=$(python3 -c 'import ast, sys
 for path in sys.argv[1:]:
-    ast.parse(open(path).read(), path)' $bridges gfps-reader tools/check-live tools/*.py tools/add-device tools/check-adapter tools/build-adapter-registry omaphones-device omaphones/*.py adapters/*/*.py tests/*.py 2>&1); then
+    ast.parse(open(path).read(), path)' $bridges gfps-reader tools/check-live tools/test-refactor tools/owner-session tools/owner-interview-demo tools/*.py tools/add-device tools/check-adapter tools/build-adapter-registry omaphones-device omaphones/*.py adapters/*/*.py tests/*.py 2>&1); then
   ok "python syntax"
 else
   fail "python syntax"; echo "$out"

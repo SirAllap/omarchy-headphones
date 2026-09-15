@@ -56,8 +56,8 @@ class Client:
                 raise RuntimeError(state.get("error", "adapter is unavailable"))
         return copy.deepcopy(self.state)
 
-    def set(self, command, field, value):
-        # Consume queued reports before sending. A cached value does not confirm a write.
+    def refresh(self):
+        # Consume queued reports before presenting a baseline or sending a command.
         while True:
             try:
                 item = self.events.get_nowait()
@@ -68,6 +68,10 @@ class Client:
             if item.get("apiVersion") == 1:
                 self.state = item
             self.serial += 1
+        return copy.deepcopy(self.state)
+
+    def set(self, command, field, value):
+        self.refresh()
         if self.state.get("values", {}).get(field) == value and field not in self.pending:
             # A control already in its original state needs no restoration write.
             return copy.deepcopy(self.state)
@@ -108,13 +112,13 @@ def restore_actions(profile, initial):
     return [(json.dumps({"apiVersion": 1, "control": key, "value": initial["values"][key]}), key, initial["values"][key]) for key in keys]
 
 
-def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, implementation=None):
+def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, implementation=None, interview=None):
     report = {"apiVersion": 1, "device": profile["id"], "owner": profile["owner"],
               "time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "implementation": implementation or profiles.implementation_hash(profile, directory, root),
               "scope": "adapter", "checks": [], "restoration": [], "passed": False,
               "untested": ["shell-integration", "reconnect", "peer-isolation", "charging", "acoustics"]}
-    if prompt is None:
+    if prompt is None and interview is None:
         report['untested'].extend(('external-change', 'repeated', 'unsupported-command'))
     initial = None
     try:
@@ -123,17 +127,35 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
         report["checks"].append({"case": "initial", "reported": initial, "passed": True})
         ordered = sorted(controls(profile), key=lambda item: item[3] == initial["values"].get(item[2]))
         for case, command, field, value in ordered:
-            state = client.set(command, field, value)
+            if interview is not None:
+                state = interview.control(case, field, value, client, command, profile)
+                if state is None:
+                    report['untested'].append(case)
+                    continue
+            else:
+                state = client.set(command, field, value)
             report["checks"].append({"case": case, "command": command, "reported": state, "passed": True})
-        if prompt is not None:
+        if prompt is not None or interview is not None:
             before = copy.deepcopy(client.state.get('values', {}))
             serial = client.serial
-            prompt('Change the listening mode using the headphones or vendor app, then press Enter: ')
-            state = client.wait(lambda s: s.get('values', {}).get('noise.mode') != before.get('noise.mode'), after=serial)
-            report['checks'].append({'case': 'external-change', 'reported': state, 'passed': True})
-            client.process.stdin.write(json.dumps({'apiVersion': 1, 'control': 'unavailable.control', 'value': True}) + '\n')
-            client.process.stdin.flush()
-            prompt('Allow repeated reports to be captured (or trigger the same status again), then press Enter: ')
+            instruction = 'Change the listening mode using the headphones or vendor app.'
+            if interview is not None:
+                performed = interview.manual('external-change', instruction)
+            else:
+                prompt(instruction)
+                performed = True
+            if performed:
+                state = client.wait(lambda s: s.get('values', {}).get('noise.mode') != before.get('noise.mode'), after=serial)
+                report['checks'].append({'case': 'external-change', 'reported': state, 'passed': True})
+            else:
+                report['untested'].append('external-change')
+            if interview is None:
+                client.process.stdin.write(json.dumps({'apiVersion': 1, 'control': 'unavailable.control', 'value': True}) + '\n')
+                client.process.stdin.flush()
+                prompt('Allow repeated reports to be captured (or trigger the same status again), then press Enter: ')
+            else:
+                # These need dedicated assertions; collecting an answer alone is not verification.
+                report['untested'].extend(('repeated', 'unsupported-command'))
         battery = profile["capabilities"].get("battery", {})
         for part in battery.get("parts", []):
             if profile.get("batterySource") != "bridge":
@@ -144,10 +166,24 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
             report["checks"].append({"case": "battery:" + part, "reported": state, "passed": True})
         if "wear.detected" in profile["capabilities"]:
             report["untested"].extend(("wear.detected:true", "wear.detected:false"))
-        report["passed"] = True
+        report["passed"] = not (interview is not None and interview.skipped)
+        if interview is not None and interview.skipped:
+            report["incompleteReason"] = "owner skipped one or more checks"
     except BaseException as error:
         report["error"] = type(error).__name__ + ": " + str(error)
     finally:
+        if interview is not None:
+            # UI/log errors must never suppress device restoration.
+            try:
+                interview.event('restoration', 'Restoring the original device settings. Ambient may briefly turn on before the original mode returns.')
+            except BaseException as error:
+                report['interviewError'] = str(error)
+                report['passed'] = False
+            report['ownerObservations'] = interview.observations
+            report['skippedOwnerSteps'] = interview.skipped
+            report['ownerObservationScope'] = 'Per-attempt owner answers; not automatic acoustic approval.'
+        if hasattr(client, 'begin_restoration'):
+            client.begin_restoration()
         if initial is not None:
             for command, field, value in restore_actions(profile, initial):
                 try:
@@ -158,6 +194,9 @@ def run(profile, directory, client, output, root=profiles.ROOT, prompt=None, imp
                     report["passed"] = False
         else:
             report["restoration"] = [{"passed": False, "error": "initial state unknown; no controls sent"}]
+        if getattr(client, 'log_errors', []):
+            report['passed'] = False
+            report['timelineErrors'] = client.log_errors
         try:
             client.close()
         finally:

@@ -48,7 +48,7 @@ def revision(root):
     paths = set(root.glob('*.qml')) | set(root.glob('*-bridge'))
     paths |= {root / n for n in ('Model.js', 'gfps-reader', 'omaphones-device')}
     paths |= set((root / 'tools').glob('*'))
-    paths |= set((root / 'omaphones').glob('*.py'))
+    paths |= set((root / 'omaphones').glob('*.py')) | set((root / 'omaphones').glob('*.html'))
     paths |= set((root / 'adapters').glob('*/*.py')) | set((root / 'adapters').glob('*/*.json'))
     paths |= set((root / 'devices').glob('*/device.json')) | set((root / 'devices').glob('*/protocol.py'))
     h = hashlib.sha256()

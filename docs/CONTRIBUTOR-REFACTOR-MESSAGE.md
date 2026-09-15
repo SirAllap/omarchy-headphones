@@ -47,8 +47,15 @@ useModeControl setting, release the competing installed mode bridge,
 and start an independent btmon BTSnoop recording before connecting. Keep
 Fast Pair enabled; for GATT use this device's observed model id and BLE address.
 
-Run tools/test-refactor for this model. Ask me to perform the physical/app
-actions and describe their actual effects. Log actions and observations
+Run tools/test-refactor for this model with --interview web if I can use a local
+browser, otherwise --interview json so you can relay its structured questions.
+Use --interview terminal if that fits your harness better. Read
+OWNER-INTERVIEW.md. Keep the process available for responses. Ask exactly the
+pending question with its choices; submit my actual answer using its request
+and session ids. Never answer Ready or a physical observation on my behalf.
+The runner gates individual changes, retains Unsure/Repeat, and announces
+restoration. Ask me to perform the physical/app actions and describe their
+actual effects. Log actions and observations
 separately, with timestamps; use start/end markers when exact action timing
 is unknown. Do not fill observations from your own interpretation of packets
 or claim acoustic effects without my confirmation.

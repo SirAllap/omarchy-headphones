@@ -19,12 +19,19 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 - An explicit `tools/test-refactor` owner workflow for the new adapter host,
   with revision fingerprint, control results, failure logging and restoration.
 - Contributor instructions and a reusable GitHub message/agent prompt.
+- Structured owner interviews through terminal, JSON lines and an optional local
+  browser panel. Readiness gates individual controls; repeated attempts retain
+  observations and restore a comparison baseline. Questions/answers are inside
+  the existing source CSV checksum boundary.
+- Explicit Pause, Skip, Stop and bounded owner waits; adapter restoration still
+  runs when interview logging fails. The assistant remains responsible for its
+  separate btmon process and temporary plugin setting.
 
 ## Verified locally
 
 `CHECK_BASE=upstream-baseline tools/check` passed:
 
-- 256 Python tests, including transport callbacks, original pins, native codecs,
+- 272 Python tests, including transport callbacks, original pins, native codecs,
   source-file corruption/loss, provenance and interrupted control restoration.
 - Model.js tests (65 declarations), generated registry/package checks, QML lint
   and Omarchy plugin validation.
@@ -38,11 +45,20 @@ at `f0f8006`. The merge retains the refactor tests and the WH-CH520 owner test.
 
 ## Hardware and publication status
 
-Sony WH-CH720N and JBL TUNE230NC TWS are paired on the maintainer's machine;
-both were disconnected when checked. No candidate hardware pass is claimed.
-Physical controls, reconnects, independent battery delivery, acoustics and
-candidate QML integration still need owner testing. A successful automated
-adapter run alone will not close these checks.
+The independent Astra-low rehearsal on candidate `d9f1b646` confirmed audible
+Sony mode changes and return to initial ANC. It also reproduced a timeout when
+setting voice focus false in ANC, and sealing rejected backward timestamps in
+the original BTSnoop captures. Both failures and all original bytes are retained.
+JBL testing is paused. No overall candidate hardware pass is claimed.
+
+The new interview was verified with synthetic devices and real stdin/stdout
+pipes. Browser QA covered Ready, an uncertain observation with comment, Repeat,
+Stop/restoration, and a completed comparison. Refresh preserved the pending
+question. These UI exercises used no Bluetooth or plugin-setting operations.
+The new guided path still needs an owner hardware rehearsal; it does not fix
+or mask the two earlier Sony-session failures. General acoustic performance,
+reconnect, battery, wear, charging, peer isolation and candidate QML integration
+remain separate hardware checks.
 
 Existing models continue to use their original bridges in normal plugin
 routing. The explicit test runner exercises the native codecs without activating

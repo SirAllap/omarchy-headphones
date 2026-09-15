@@ -33,22 +33,36 @@ def prepare(adapter, info, ble_address='', model_id=''):
 class TimelineClient:
     def __init__(self, client, directory):
         self.client, self.directory = client, directory
+        self.restoring = False
+        self.log_errors = []
 
     def __getattr__(self, name):
         return getattr(self.client, name)
 
+    def begin_restoration(self):
+        self.restoring = True
+
+    def mark(self, kind, actor, description):
+        try:
+            return recording.mark(self.directory, kind, actor, description)
+        except Exception as error:
+            if not self.restoring:
+                raise
+            self.log_errors.append(str(error))
+            return None
+
     def set(self, command, field, value):
-        recording.mark(self.directory, 'action', 'test-refactor', command)
+        self.last_action_entry = self.mark('action', 'test-refactor', command)
         try:
             state = self.client.set(command, field, value)
         except BaseException as error:
-            recording.mark(self.directory, 'failure', 'adapter', str(error))
+            self.mark('failure', 'adapter', str(error))
             raise
-        recording.mark(self.directory, 'note', 'adapter', json.dumps({'reported': state}))
+        self.last_reply_entry = self.mark('note', 'adapter', json.dumps({'reported': state}))
         return state
 
 
-def run(adapter, directory, *, ble_address='', model_id='', interactive=True, prompt=input, root=ROOT):
+def run(adapter, directory, *, ble_address='', model_id='', interactive=True, prompt=input, root=ROOT, interview_mode=None, owner_timeout=180):
     from .scaffold import require_isolated
     require_isolated(root)
     meta = recording.read_json(directory / 'session.json')
@@ -73,8 +87,23 @@ def run(adapter, directory, *, ble_address='', model_id='', interactive=True, pr
               'transport': transport, 'parameters': parameters,
               'untested': ['shell-integration', 'reconnect', 'peer-isolation', 'charging', 'acoustics']}
     client = None
+    interview = None
     previous = {sig: signal.signal(sig, live.interrupt) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
+        if interactive and interview_mode:
+            from .interview import Interview, Console
+            if interview_mode == 'web':
+                from .interview_web import Browser
+                transport_ui = Browser()
+            elif interview_mode in ('terminal', 'json'):
+                transport_ui = Console(interview_mode)
+            else:
+                raise ValueError('unknown interview interface')
+            try:
+                interview = Interview(directory, transport_ui, owner_timeout)
+            except BaseException:
+                transport_ui.close()
+                raise
         client = TimelineClient(live.Client(command), directory)
         if parameters.get('noModes'):
             try:
@@ -105,8 +134,8 @@ def run(adapter, directory, *, ble_address='', model_id='', interactive=True, pr
                 raise ValueError('owner observation is required')
             recording.mark(directory, 'observation', 'owner', observation)
         output = io.StringIO()
-        result = live.run(profile, directory, client, output, root, prompt=ask if interactive else None,
-                          implementation=current['codeSha256'])
+        result = live.run(profile, directory, client, output, root, prompt=ask if interactive and interview is None else None,
+                          implementation=current['codeSha256'], interview=interview)
         report.update(result)
     except BaseException as error:
         report.update(passed=False, error=type(error).__name__ + ': ' + str(error))
@@ -121,6 +150,14 @@ def run(adapter, directory, *, ble_address='', model_id='', interactive=True, pr
             recording.exclusive_json(directory / 'adapter-result.json', report)
             recording.mark(directory, 'note', 'test-refactor', 'Adapter result: ' + ('passed' if report['passed'] else 'FAILED'))
         finally:
-            for sig, handler in previous.items():
-                signal.signal(sig, handler)
+            try:
+                if interview is not None:
+                    try:
+                        interview.event('finished', 'Adapter test ended. The assistant must stop capture and restore the previous plugin mode-control setting.',
+                                        passed=report.get('passed', False), cleanupRequired=['stop-capture', 'restore-plugin-setting'])
+                    finally:
+                        interview.close()
+            finally:
+                for sig, handler in previous.items():
+                    signal.signal(sig, handler)
     return report

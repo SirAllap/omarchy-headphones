@@ -17,10 +17,16 @@ def main():
     parser.add_argument('--ble-address', default='')
     parser.add_argument('--model-id', default='')
     parser.add_argument('--automatic', action='store_true', help='adapter controls only; physical actions remain untested')
+    parser.add_argument('--interview', choices=('terminal', 'json', 'web'), default='terminal')
+    parser.add_argument('--owner-timeout', type=float, default=180, help='maximum seconds for each owner response')
     args = parser.parse_args()
     report = migration.run(args.adapter, args.session.resolve(), ble_address=args.ble_address,
-                           model_id=args.model_id, interactive=not args.automatic)
-    print(json.dumps(report, indent=2))
+                           model_id=args.model_id, interactive=not args.automatic,
+                           interview_mode=args.interview, owner_timeout=args.owner_timeout)
+    if args.interview == 'json':
+        print(json.dumps({'type': 'test-result', 'version': 1, 'report': report}), flush=True)
+    else:
+        print(json.dumps(report, indent=2))
     return 0 if report['passed'] else 1
 
 

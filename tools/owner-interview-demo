@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Simulate a short owner interview without accessing Bluetooth or plugin settings."""
+import argparse
+import csv
+import io
+import json
+from pathlib import Path
+import sys
+import tempfile
+import time
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from omaphones import interview, live, owner_recording
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--interview', choices=('web', 'terminal', 'json'), default='web')
+    parser.add_argument('--owner-timeout', type=float, default=180)
+    args = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix='omaphones-interview-demo-') as temp:
+        directory = Path(temp)
+        (directory / 'session.json').write_text(json.dumps({'device': {'name': 'SIMULATION — no headphones'},
+            'startedMonotonicNs': time.monotonic_ns()}))
+        with (directory / 'actions.csv').open('w', newline='') as target:
+            csv.writer(target).writerow(owner_recording.FIELDS)
+        if args.interview == 'web':
+            from omaphones.interview_web import Browser
+            ui = Browser()
+        else:
+            ui = interview.Console(args.interview)
+        session = interview.Interview(directory, ui, args.owner_timeout)
+        class Fake:
+            state = {'values': {'noise.mode': 'off'}}
+            def set(self, command, field, value):
+                self.state = {'values': {field: value}}
+                return self.state
+        device = Fake()
+        result = {'synthetic': True, 'scope': 'UI demonstration; no hardware operations'}
+        try:
+            state = session.control('noise.mode:anc', 'noise.mode', 'anc', device,
+                                    '{"control":"noise.mode","value":"anc"}',
+                                    {'capabilities': {'noise.mode': {'values': ['off', 'anc']}}})
+            result['completed'] = state is not None
+        except interview.Stopped as error:
+            result.update(completed=False, error=str(error))
+        finally:
+            session.event('restoration', 'Simulation: restoring the original Off setting.')
+            device.set('', 'noise.mode', 'off')
+            result.update(ownerObservations=session.observations, finalState=device.state)
+            session.event('finished', 'Simulation finished. No hardware was used.')
+            session.close()
+        print(json.dumps({'type': 'test-result', 'version': 1, 'report': result}), flush=True)
+        return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

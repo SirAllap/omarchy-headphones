@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Omaphones · Owner session</title>
+  <style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f1f0e9;
+    --card: #fffef9;
+    --ink: #23372d;
+    --muted: #627268;
+    --line: #d7ded4;
+    --accent: #215d45;
+    --soft: #eaf2e9;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.55 system-ui,sans-serif;
+  }
+  main {
+    max-width: 760px;
+    margin: auto;
+    padding: 42px 22px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .brand {
+    font-weight: 750;
+    letter-spacing: -.5px;
+    font-size: 22px;
+  }
+  .badge {
+    font-size: 12px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: var(--soft);
+    padding: 6px 12px;
+    border-radius: 30px;
+  }
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 34px;
+    box-shadow: 0 12px 50px #17342608;
+  }
+  .eyebrow {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(25px,4vw,34px);
+    font-weight: 620;
+    line-height: 1.25;
+    letter-spacing: -.7px;
+    margin: 0 0 26px;
+  }
+  .context {
+    white-space: pre-wrap;
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0 0 20px;
+  }
+  #choices {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+  }
+  button {
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--ink);
+    padding: 13px 19px;
+    cursor: pointer;
+    min-height: 48px;
+  }
+  button:hover {
+    border-color: var(--accent);
+  }
+  button[aria-pressed=true] {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  button:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid #d09740;
+    outline-offset: 3px;
+  }
+  button:disabled {
+    opacity: .45;
+    cursor: default;
+  }
+  label {
+    display: block;
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  textarea {
+    display: block;
+    width: 100%;
+    resize: vertical;
+    min-height: 90px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--ink);
+    font: inherit;
+    padding: 12px;
+  }
+  #submit {
+    background: var(--accent);
+    color: white;
+    margin-top: 18px;
+    min-width: 160px;
+  }
+  .footer {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 22px 8px;
+  }
+  .controls {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    margin-top: 24px;
+  }
+  #stop {
+    font-size: 14px;
+    background: transparent;
+  }
+  .error {
+    color: #b14d36;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  #status {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  [hidden] {
+    display: none!important;
+  }
+  @media (max-width:480px) {
+    main {
+      padding: 24px 14px;
+    }
+    section {
+      padding: 24px;
+    }
+    header {
+      margin-bottom: 24px;
+    }
+    .badge {
+      font-size: 10px;
+    }
+    #choices button {
+      flex: 1 1 40%;
+    }
+  }
+  @media (prefers-color-scheme:dark) {
+    :root {
+      --bg: #15231d;
+      --card: #1c2d25;
+      --ink: #e0eadd;
+      --muted: #a1b6a6;
+      --line: #3b5141;
+      --accent: #386f52;
+      --soft: #294234;
+    }
+    .error {
+      color: #ffb59e;
+    }
+  }
+  </style>
+  <main>
+    <header><span class="brand">Omaphones <span aria-hidden="true">◉</span></span><span class="badge" id="badge">Local owner session</span></header>
+    <section aria-labelledby="question">
+      <p class="eyebrow" id="step">Connecting to the test runner</p>
+      <h1 id="question">Your observations, one step at a time.</h1>
+      <p class="context" id="context"></p>
+      <div id="form"
+        hidden><div id="choices" role="group" aria-label="Answer choices"></div><label for="comment">Comment <span id="required">(optional)</span></label><textarea id="comment" maxlength="4000" placeholder="Describe what you noticed, including anything you are unsure about."></textarea><button id="submit" disabled>Save answer</button></div>
+      <p class="error" id="error" role="alert"></p>
+      <p id="status" role="status"
+        aria-live="polite">Keep the headphones nearby. Changes wait for your readiness.</p>
+    </section>
+    <div
+      class="controls"><span class="footer">Answers stay with the recording.<br>Unsure and repeated attempts are kept.</span><button id="stop">Stop session</button></div>
+    <p
+      class="footer">Stop restores device settings after the current operation finishes. Your assistant handles recording and plugin cleanup.</p>
+  </main>
+  <script>
+  const token = location.hash.slice(1) || sessionStorage.getItem("owner-token") ||
+    "";
+  sessionStorage.setItem("owner-token", token);
+  history.replaceState(null, "", location.pathname);
+  const $ = (id) => document.getElementById(id);
+  let current = null, selected = null, busy = false, finished = false;
+  const controlNames = {
+    "noise.mode": "Noise cancellation",
+    "ambient.level": "Ambient sound level",
+    "ambient.focus_on_voice": "Focus on voices",
+  };
+  const valueName = (v) =>
+    typeof v === "boolean"
+      ? (v ? "On" : "Off")
+      : ({ anc: "ANC", off: "Off", ambient: "Ambient" }[v] || String(v));
+  const labels = {
+    ready: "Ready",
+    pause: "Pause",
+    skip: "Skip",
+    stop: "Stop",
+    resume: "Resume",
+    quieter: "Quieter",
+    louder: "Louder",
+    same: "No change",
+    unsure: "Unsure",
+    changed: "Changed",
+    continue: "Continue",
+    repeat: "Repeat",
+    done: "Done",
+    "could-not-perform": "Could not perform",
+    observed: "Observed",
+  };
+  async function api(path, body) {
+    const r = await fetch(path, {
+      method: body ? "POST" : "GET",
+      headers: {
+        "X-Session-Token": token,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const value = await r.json();
+    if (!r.ok) throw Error(value.error || "Request rejected");
+    return value;
+  }
+  function render(state) {
+    $("status").textContent = state.status.message || "";
+    if (state.finished) {
+      finished = true;
+      sessionStorage.removeItem("owner-token");
+      $("badge").textContent = "Session ended";
+      $("question").textContent = "This session has ended.";
+      $("form").hidden = true;
+      $("context").textContent =
+        "Your answers have been saved. See the assistant’s report for results and cleanup.";
+      $("stop").disabled = true;
+      return;
+    }
+    if (state.stopped) {
+      $("badge").textContent = "Stopping";
+      $("form").hidden = true;
+      $("question").textContent = "Stopping and restoring settings…";
+      return;
+    }
+    const q = state.question;
+    if (!q) {
+      current = null;
+      $("form").hidden = true;
+      $("question").textContent = state.status.message || "Working…";
+      $("context").textContent = "";
+      return;
+    }
+    if (current?.requestId === q.requestId) return;
+    current = q;
+    selected = null;
+    $("error").textContent = "";
+    $("badge").textContent = q.phase;
+    $("step").textContent = q.device + " · attempt " + q.attempt;
+    $("question").textContent = q.question;
+    $("context").textContent = q.context?.baseline
+      ? "Reported baseline: " +
+        Object.entries(q.context.baseline).map(([k, v]) =>
+          (controlNames[k] || "Setting") + ": " + valueName(v)
+        ).join(" · ")
+      : "";
+    $("form").hidden = false;
+    $("comment").value = "";
+    $("submit").disabled = true;
+    $("required").textContent =
+      ["completion"].includes(q.phase) || q.choices.includes("observed")
+        ? "(describe your action or observation)"
+        : "(optional)";
+    $("choices").replaceChildren();
+    for (const choice of q.choices) {
+      const b = document.createElement("button");
+      b.textContent = labels[choice] || choice;
+      b.setAttribute("aria-pressed", "false");
+      b.onclick = () => {
+        selected = choice;
+        for (const c of $("choices").children) {
+          c.setAttribute("aria-pressed", String(c === b));
+        }
+        $("submit").disabled = false;
+      };
+      $("choices").append(b);
+    }
+  }
+  $("submit").onclick = async () => {
+    if (busy || !current || !selected) return;
+    busy = true;
+    $("submit").disabled = true;
+    try {
+      await api("/answer", {
+        type: "owner-answer",
+        version: 1,
+        sessionId: current.sessionId,
+        requestId: current.requestId,
+        answer: selected,
+        text: $("comment").value,
+        channel: "browser",
+      });
+      $("form").hidden = true;
+      current = null;
+      $("status").textContent = "Answer saved. Waiting for the next step.";
+    } catch (e) {
+      $("error").textContent = e.message;
+      $("submit").disabled = false;
+    } finally {
+      busy = false;
+    }
+  };
+  $("stop").onclick = async () => {
+    try {
+      await api("/stop", { stop: true });
+      $("stop").disabled = true;
+      $("form").hidden = true;
+      $("status").textContent = "Stop requested. Waiting for restoration.";
+    } catch (e) {
+      $("error").textContent = e.message;
+    }
+  };
+  async function poll() {
+    if (finished) return;
+    try {
+      render(await api("/state"));
+    } catch (e) {
+      $("error").textContent =
+        "Connection to the runner is unavailable. No answer was submitted. Check the assistant’s report before restarting.";
+      $("submit").disabled = true;
+    }
+    if (!finished) setTimeout(poll, 700);
+  }
+  poll();
+  </script>
+</html>
