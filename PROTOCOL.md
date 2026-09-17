@@ -1,8 +1,10 @@
 # What these headphones say, and how
 
 Notes from probing a **JBL TUNE230NC TWS** (`A0:11:22:33:44:55`, modalias
-`bluetooth:v02B0p0000d001F`, Fast Pair model id `71f20a`) on Arch/BlueZ 5.87.
-Its *audio* side is BR/EDR only — every profile `bluetoothctl info` lists is
+`bluetooth:v02B0p0000d001F`, Fast Pair model id `71f20a`) and a **JBL Wave
+Buds 2** (`50:1B:6A:0B:0B:6E`, modalias `bluetooth:v0ECBp2100d001F`, Fast Pair
+model id `ea59a0`) on Arch/BlueZ 5.87.
+Their *audio* side is BR/EDR only — every profile `bluetoothctl info` lists is
 RFCOMM or A2DP, and there is no GATT to read on it. The control protocol is on a
 separate LE connection: [further down](#the-control-protocol-lives-on-ble-and-it-is-fully-working).
 
@@ -315,7 +317,9 @@ instead.
 
 [`jbl-bridge`](jbl-bridge) is the same protocol as a long-lived process: it owns
 one BLE link, prints a JSON line whenever the mode changes, and takes `set <mode>`
-on stdin. The plugin's service spawns it while the earbuds are connected and
+on stdin. Which notify/write handles to dial is chosen by the Fast Pair model id
+the service passes as its last argument — TUNE230NC `0x000c`/`0x0010`, Wave Buds
+2 `0xa205`/`0xa202`, anything else the TUNE230NC ones. The plugin's service spawns it while the earbuds are connected and
 writes commands into it — the service, not the panel, so a second monitor's
 widget does not mean a second link. That one conversation is why clicking a mode
 and hearing about a touch-control change come back the same way; a second
@@ -396,6 +400,36 @@ sweep on the only earbuds you own is how you find them. The RFCOMM command
 numbers above are frames the official Android app is known to send, by way of
 bluetooth-py; the BLE payloads were worked out here, from what the earbuds
 reported back to the frames those numbers suggested.
+
+### The Wave Buds 2 — the same frames, higher handles
+
+A second JBL model captured on the same protocol: **JBL Wave Buds 2**, Fast
+Pair model id `ea59a0`, classic `50:1B:6A:0B:0B:6E`. `bluetoothctl info` on it
+lists the Fast Pair UUID plus the usual HFP/A2DP set; its control traffic sits
+on the same excelpoint service, but the value handles are not the TUNE230NC's.
+The TUNE230NC enumerated the service at the bottom of the tree (`0x000c` /
+`0x0010`); here the whole excelpoint service lives at `0xa200` and neither
+handle survived the move:
+
+| handle | UUID | props | role |
+|---|---|---|---|
+| `0xa205` | `…2e636f6d0001` | `0x10` notify | the device talks here |
+| `0xa202` | `…2e636f6d0002` | `0x0c` write + write-without-response | commands go here |
+
+Everything observed on it matches the TUNE230NC section frame for frame: the
+`aa 9b 02 01 01` notify-on, the `aa 91 01 11` mode query answered by an
+`aa 91 07 12 …` report, and every mode payload from the table above reporting
+back on the set. One session recorded the full cycle — initial state **ANC**,
+then Off, ANC, Ambient Aware and TalkThru, each with its report (the device
+sends each report twice), then back to ANC — verbatim in
+[`docs/captures/jbl-wave-buds-2.txt`](docs/captures/jbl-wave-buds-2.txt), with
+the `bluetoothctl info` listing in
+[`docs/captures/jbl-wave-buds-2-bluetoothctl.txt`](docs/captures/jbl-wave-buds-2-bluetoothctl.txt).
+
+Because the handles differ and the model id is the only thing a connect hands
+over for free, `jbl-bridge` carries a per-model table: `MODELS` is keyed by
+Fast Pair model id, picks the notify/write handles, and a model not listed
+keeps the TUNE230NC handles on which the protocol was first confirmed.
 
 ## Sony MDR v2 — the listening mode on the WH-CH720N
 
