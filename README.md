@@ -101,6 +101,15 @@ Headphones not on the list? [Add yours](#add-your-own-headphones).
 </tr>
 </table>
 
+<table>
+<tr>
+<td width="50%"><img src="docs/gallery/jbl-wave-buds-2.png" alt="JBL Wave Buds 2: left, right and case, Off / ANC / Ambient / TalkThru" width="100%"></td>
+</tr>
+<tr>
+<td align="center">JBL Wave Buds 2 — <a href="https://github.com/carlosr-sh">@carlosr-sh</a></td>
+</tr>
+</table>
+
 ## What it does
 
 - **Battery level** — per earbud and the case, or the single battery of
@@ -135,6 +144,7 @@ same idea, built for Apple's own protocol, and the plugin this one is modelled o
 | Device                      | Battery                                                               | Noise control                                                                                   | Confirmed by                   |
 |:----------------------------|:----------------------------------------------------------------------|:------------------------------------------------------------------------------------------------|:-------------------------------|
 | JBL TUNE230NC TWS (earbuds) | <img src="docs/icons/yes.svg" width="14" alt="yes"> left, right, case | <img src="docs/icons/yes.svg" width="14" alt="yes"> Off · ANC · Ambient · TalkThru              | [@ncr](https://github.com/ncr) |
+| JBL Wave Buds 2 (earbuds)   | <img src="docs/icons/yes.svg" width="14" alt="yes"> left, right, case | <img src="docs/icons/yes.svg" width="14" alt="yes"> Off · ANC · Ambient · TalkThru              | [@carlosr-sh](https://github.com/carlosr-sh) |
 | Sony WH-CH720N (over-ear)   | <img src="docs/icons/yes.svg" width="14" alt="yes"> one figure        | <img src="docs/icons/yes.svg" width="14" alt="yes"> Off · ANC · Ambient (level, Focus on Voice) | [@ncr](https://github.com/ncr) |
 | Sony WH-1000XM5 (over-ear)  | <img src="docs/icons/yes.svg" width="14" alt="yes"> one figure        | <img src="docs/icons/yes.svg" width="14" alt="yes"> Off · ANC · Ambient (level, Focus on Voice) | [@huynguyendinhquang](https://github.com/huynguyendinhquang) |
 | Sony WH-1000XM6 (over-ear)  | <img src="docs/icons/yes.svg" width="14" alt="yes"> one figure        | <img src="docs/icons/yes.svg" width="14" alt="yes"> Off · ANC · Ambient (level, Focus on Voice) · wear pause/resume | [@f-iacono](https://github.com/f-iacono) |
