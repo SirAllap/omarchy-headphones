@@ -1,4 +1,4 @@
-Owner: carlos
+Owner: carlosr-sh
 Model: JBL Wave Buds 2
 Date: 2026-09-17
 Source: btgatt-client driven over a pty by jbl_capture.py; one continuous

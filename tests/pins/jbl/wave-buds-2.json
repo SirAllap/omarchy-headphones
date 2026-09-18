@@ -1,6 +1,6 @@
 {
   "model": "JBL Wave Buds 2",
-  "owner": "carlos",
+  "owner": "carlosr-sh",
   "bridge": "jbl-bridge",
   "capture": "docs/captures/jbl-wave-buds-2.txt",
   "notes": "Observed session 2026-09-17 on the excelpoint service: notify-on, mode query answered anc, every mode set with its report read back (the device repeats each report), restore to anc. Selected by Fast Pair model id ea59a0: notify 0xa205, write 0xa202.",
