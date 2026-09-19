@@ -1,0 +1,26 @@
+Owner: SirAllap
+Model: Sony WH-1000XM4 (firmware 3.0.1)
+Date: 2026-09-19
+Source: MDR payloads logged at the bridge (sony-bridge with this change),
+Arch Linux / BlueZ. Framing, sequence bytes and checksums omitted.
+-> is sent to the headset, <- is what it answered. Every mode was checked
+by ear: Off, ANC and Ambient each change what is heard, and Ambient passes
+outside sound louder as the level rises.
+
+->  66 02                      GET NC+ASM
+<-  67 02 01 02 02 01 00 00    RET: on, DUAL_SINGLE_OFF, ncValue 2 (NC)
+->  68 02 00 01 00 01 00 00    SET off
+<-  69 02 00 02 02 01 00 00    NTFY: effect off
+->  68 02 11 01 02 01 00 00    SET ANC
+<-  69 02 01 02 02 01 00 00    NTFY: on, ncValue 2 (NC)
+->  68 02 11 01 00 01 00 01    SET ambient, level 1
+<-  69 02 01 02 00 01 00 01    NTFY: on, ncValue 0, level 1  -> ambient
+->  68 02 11 01 00 01 00 14    SET ambient, level 20
+<-  69 02 01 02 00 01 00 14    NTFY: on, ncValue 0, level 20
+->  68 02 11 01 02 01 00 00    SET ANC
+<-  69 02 01 02 02 01 00 00    NTFY: on, ncValue 2 (NC)
+
+Before this change the bridge sent ambient as ncValue 1 with effect 0x01:
+->  68 02 01 02 01 01 00 00
+The headset accepts it, but ncValue 1 is SINGLE (wind noise reduction):
+no outside sound is passed through at any level.
