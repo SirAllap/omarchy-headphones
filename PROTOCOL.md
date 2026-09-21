@@ -773,6 +773,13 @@ carries the level that was sent. An earlier version sent ambient as
 `68 02 01 02 01 01 00 00`: the headset accepts and echoes it, but `ncValue`
 `0x01` is wind noise reduction, so no outside sound comes through.
 
+In noise cancelling the headset reports level `0x00` (`69 02 01 02 02 01 00 00`
+after an ambient at 20), while effect off keeps the level (`69 02 00 02 00 01
+00 14`). So the bridge remembers the last level above zero this headset
+reported, and a `set ambient` that finds the reported level at zero sends that
+one; with nothing remembered it sends 1, the bottom of the dial. v1 only: a v2
+headset keeps its level across modes and is sent what it was.
+
 Sony's v1 table also numbers an NC-only `0x01` and an ambient-only `0x03`. Both
 were asked on this headset and neither was answered, so neither is in the
 bridge: their block lengths are unconfirmed, and a variant nobody has seen

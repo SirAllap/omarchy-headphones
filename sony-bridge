@@ -491,6 +491,10 @@ class Bridge:
         self.inquired = None
         self.mode = ""
         self.level = 0
+        # v1 only: the last ambient level the headset reported above zero. It
+        # reports 0 in noise cancelling, so going back to ambient with the
+        # reported level would always start at the bottom of the dial.
+        self.ambient_level = 0
         self.voice = False
         self.nc_value = NC_VALUE_DEFAULT
         # None until a SYSTEM status frame says otherwise — most headsets never
@@ -805,6 +809,8 @@ class Bridge:
         self.inquired = state["inquired"]
         self.mode = state["mode"]
         self.level = state["level"]
+        if state["inquired"] == 0x02 and state["level"] > 0:
+            self.ambient_level = state["level"]
         self.voice = state["voice"]
         if state["ncValue"] is not None:
             # Whatever the headset reports here is what a SET must echo back;
@@ -890,7 +896,12 @@ class Bridge:
         if parts[0] == "set" and len(parts) > 1:
             if parts[1] not in available:
                 return
-            self.push(self.set_frame(parts[1], self.level, self.voice))
+            level = self.level
+            if self.inquired == 0x02 and parts[1] == "ambient" and not level:
+                # Back to the level this headset last said it had in ambient.
+                # Nothing remembered yet is the bottom of the dial, as before.
+                level = self.ambient_level
+            self.push(self.set_frame(parts[1], level, self.voice))
         elif parts[0] == "level" and len(parts) > 1:
             try:
                 level = int(parts[1])
